@@ -15,6 +15,11 @@ public enum RemoteKey: String, Codable, CaseIterable, Sendable {
     case interrupt
 }
 
+/// What a notification is about. The words are the relay's, so a Mac cannot make a phone show any text it likes.
+public enum RemoteNotice: String, Codable, Sendable {
+    case waiting, done
+}
+
 /// What the sidebar dot shows for a session.
 public enum RemoteStatus: String, Codable, Sendable {
     case idle, working, waiting, done, stopped
@@ -47,6 +52,8 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         /// Goes in whole, as a paste, and waits for a Return.
         case send(session: UUID, text: String)
         case key(session: UUID, key: RemoteKey)
+        /// Where Apple can reach this phone with a notification. `sandbox` is true for a build run from Xcode.
+        case notify(token: Data, sandbox: Bool)
     }
 
     public init(id: UUID = UUID(), _ action: Action) {

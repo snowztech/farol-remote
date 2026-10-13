@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"encoding/binary"
+	"log"
 	"net/http"
 	"regexp"
 	"sync"
+	"time"
 
 	"github.com/coder/websocket"
 )
@@ -19,6 +21,8 @@ type room struct {
 type relay struct {
 	mu    sync.Mutex
 	rooms map[string]*room
+	// Nil when the relay has no key from Apple, and then it sends no notifications.
+	push *pusher
 }
 
 // A room is named by the hash of its Mac's public key, which only that Mac and its phones know.
@@ -70,7 +74,23 @@ func (r *relay) serveMac(ctx context.Context, name string, mac *peer) {
 	}
 	r.mu.Unlock()
 
+	pushes, since := 0, time.Now()
 	mac.read(ctx, func(message []byte) {
+		if len(message) > 1 && message[0] == framePush && r.push != nil {
+			if time.Since(since) > time.Minute {
+				pushes, since = 0, time.Now()
+			}
+			if pushes++; pushes > pushesPerMinute {
+				return
+			}
+			// Apple can be slow, and the Mac's other messages must not wait for it.
+			go func(payload []byte) {
+				if err := r.push.send(context.Background(), payload); err != nil {
+					log.Printf("notification not sent: %v", err)
+				}
+			}(message[1:])
+			return
+		}
 		if len(message) < 5 || message[0] != frameData {
 			return
 		}

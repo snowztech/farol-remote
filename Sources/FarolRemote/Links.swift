@@ -33,6 +33,12 @@ public enum RelayFrame: Equatable, Sendable {
         return message + payload
     }
 
+    /// What a Mac sends to have Apple notify one of its phones. The relay holds the key Apple asks for, and writes the words.
+    public static func push(token: Data, sandbox: Bool, notice: RemoteNotice) -> Data {
+        let request = ["token": token.map { String(format: "%02x", $0) }.joined(), "notice": notice.rawValue, "sandbox": sandbox ? "1" : ""]
+        return Data([5]) + ((try? JSONEncoder().encode(request)) ?? Data())
+    }
+
     /// `side` is who reads: what the Mac gets carries a phone's number, what a phone gets does not.
     public init?(_ message: Data, readBy side: SecureChannel.Side) {
         guard let kind = message.first else { return nil }
@@ -97,8 +103,9 @@ public struct MacLink {
             open = true
             return [.ready(device)]
         case .sealed(let sealed):
-            guard open, let plain = try? channel?.open(sealed),
-                  let command = try? JSONDecoder().decode(RemoteCommand.self, from: plain) else { return [.close] }
+            guard open, let plain = try? channel?.open(sealed) else { return [.close] }
+            // One that opens and does not read is from a newer phone, and is left alone.
+            guard let command = try? JSONDecoder().decode(RemoteCommand.self, from: plain) else { return [] }
             return [.command(command)]
         case .paired, .refused:
             return [.close]
@@ -157,8 +164,9 @@ public struct PhoneLink {
             open = true
             return [.ready]
         case .sealed(let sealed):
-            guard open, let plain = try? channel.open(sealed),
-                  let event = try? JSONDecoder().decode(RemoteEvent.self, from: plain) else { return [.close] }
+            guard open, let plain = try? channel.open(sealed) else { return [.close] }
+            // One that opens and does not read is from a newer Mac, and is left alone.
+            guard let event = try? JSONDecoder().decode(RemoteEvent.self, from: plain) else { return [] }
             return [.event(event)]
         case .pair:
             return [.close]
@@ -167,7 +175,11 @@ public struct PhoneLink {
 
     /// Nil until the connection is ready.
     public mutating func seal(_ command: RemoteCommand) -> WireFrame? {
-        guard open, let plain = try? JSONEncoder().encode(command), let sealed = try? channel.seal(plain) else { return nil }
+        (try? JSONEncoder().encode(command)).flatMap { sealRaw($0) }
+    }
+
+    mutating func sealRaw(_ plain: Data) -> WireFrame? {
+        guard open, let sealed = try? channel.seal(plain) else { return nil }
         return .sealed(sealed)
     }
 }

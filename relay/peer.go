@@ -15,9 +15,11 @@ const (
 	bytesPerSecond = 512 << 10
 	burstBytes     = 2 << 20
 	// A peer too slow to take this many messages is cut off, not waited for.
-	queued       = 64
-	pingEvery    = 30 * time.Second
-	writeTimeout = 10 * time.Second
+	queued = 64
+	// How many notifications one Mac may ask for in a minute. Agents do not wait or finish faster than this.
+	pushesPerMinute = 20
+	pingEvery       = 30 * time.Second
+	writeTimeout    = 10 * time.Second
 )
 
 type peer struct {

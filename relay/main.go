@@ -13,7 +13,11 @@ func main() {
 	if port := os.Getenv("PORT"); port != "" {
 		address = ":" + port
 	}
-	r := &relay{rooms: map[string]*room{}}
-	log.Printf("farol relay on %s", address)
+	push, err := newPusher()
+	if err != nil {
+		log.Fatal(err)
+	}
+	r := &relay{rooms: map[string]*room{}, push: push}
+	log.Printf("farol relay on %s, notifications %s", address, map[bool]string{true: "on", false: "off"}[push != nil])
 	log.Fatal(http.ListenAndServe(address, r.handler()))
 }

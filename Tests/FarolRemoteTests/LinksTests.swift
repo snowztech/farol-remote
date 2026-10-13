@@ -129,3 +129,26 @@ private struct Pair {
     #expect(RelayFrame(Data(), readBy: .phone) == nil)
     #expect(RelayFrame.room(for: Data()) == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
 }
+
+@Test func aMessageFromANewerAppIsLeftAlone() throws {
+    var pair = Pair()
+    try pair.scanAndConnect()
+    // Sealed by the real phone, so it opens, but it is not a command this Mac knows.
+    let sealedUnknown = pair.phone.sealRaw(Data(#"{"id":"x","action":{"rename":{}}}"#.utf8))
+    let unknown = try #require(sealedUnknown)
+    let before = pair.macSaw.count
+    pair.toMac([unknown])
+    #expect(pair.macSaw.count == before)
+    // The connection is still good for what it does know.
+    let command = RemoteCommand(.watch(session: nil))
+    let sealed = pair.phone.seal(command)
+    pair.toMac([try #require(sealed)])
+    #expect(pair.macSaw.last == .command(command))
+}
+
+@Test func aPushRequestCarriesTheTokenAndWhatItIsAbout() throws {
+    let message = RelayFrame.push(token: Data([0xAB, 0x01, 0xFF]), sandbox: true, notice: .waiting)
+    #expect(message.first == 5)
+    let request = try JSONDecoder().decode([String: String].self, from: message.dropFirst())
+    #expect(request == ["token": "ab01ff", "notice": "waiting", "sandbox": "1"])
+}

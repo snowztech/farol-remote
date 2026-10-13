@@ -12,6 +12,8 @@ const (
 	// To a phone: its Mac is here, or is not.
 	frameOnline
 	frameOffline
+	// From the Mac: have Apple notify one of its phones, which may not be connected at all.
+	framePush
 )
 
 func numbered(kind byte, id uint32, payload []byte) []byte {
