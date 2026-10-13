@@ -41,7 +41,7 @@ A phone knows one Mac or one server at a time. Scanning a server's code takes it
 | `farol-remote devices` | Lists the phones this machine lets in. |
 | `farol-remote forget <name>` | Stops letting a phone in. One that is connected is cut off at once. |
 | `farol-remote status <word>` | Says what the agent in this session is doing. The hooks `setup` adds call it. |
-| `farol-remote version` | Says which release this is. |
+| `farol-remote version` | Says which release this is. So do `--version` and `-v`. |
 
 A code works once and lasts two minutes. Whoever scans it can type into your sessions, so show it to nobody else.
 

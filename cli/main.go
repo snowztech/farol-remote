@@ -4,9 +4,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -27,7 +29,7 @@ The Farol Remote CLI, for a machine that stays on. It lets a paired phone see an
   forget <name>   Stop letting a phone in.
   status <word>   Say what the agent in this session is doing: working, waiting, done or clear.
                   An agent's hooks call it. Outside tmux it does nothing, so the hooks are safe anywhere.
-  version         Say which release this is.
+  version         Say which release this is. So do --version and -v.
 `
 
 // Set to the release's tag when it is built for one.
@@ -35,8 +37,14 @@ var version = "dev"
 
 func main() {
 	relay := flag.String("relay", env("FAROL_RELAY", "wss://relay.farol.sh"), "the relay that joins this host with its phones")
+	asked := flag.Bool("version", false, "say which release this is")
+	flag.BoolVar(asked, "v", false, "say which release this is")
 	flag.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 	flag.Parse()
+	if *asked {
+		fmt.Println(version)
+		return
+	}
 	if !strings.Contains(*relay, "://") {
 		*relay = "wss://" + *relay
 	}
@@ -77,6 +85,8 @@ func main() {
 		if len(store.devices()) == 0 {
 			showCode(store, *relay, key)
 		}
+		// First in the log, so a report that quotes the log says which release it was.
+		log.Printf("farol-remote %s", version)
 		serve(newHost(key, store, newTmux()), *relay+"/v1/rooms/"+room(key.public)+"/mac")
 	case "setup":
 		if setup(*relay) && len(store.devices()) == 0 {
@@ -154,13 +164,18 @@ func serve(h *host, url string) {
 	}
 }
 
-func connect(h *host, url string) error {
+func connect(h *host, address string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	dialing, done := context.WithTimeout(ctx, 15*time.Second)
-	conn, _, err := websocket.Dial(dialing, url, nil)
+	conn, _, err := websocket.Dial(dialing, address, nil)
 	done()
 	if err != nil {
+		// The error names the address it called, which ends in this machine's room. A log gets pasted into bug reports, and the room is for this machine and its phones alone.
+		var failed *url.Error
+		if errors.As(err, &failed) {
+			err = failed.Err
+		}
 		return err
 	}
 	defer conn.CloseNow()
