@@ -22,6 +22,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: relay/go.mod
+          cache-dependency-path: relay/go.sum
       - run: go vet ./...
       - run: go test -race ./...
 
@@ -35,6 +36,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
       # One test types into a real session.
       - run: sudo apt-get update && sudo apt-get install -y tmux
       - run: go vet ./...
