@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Farol Remote: one connection",
+    "locale": "en",
+    "viewBox": [1080, 740],
+    "column_fit": "spread",
+    "quality_profile": "showcase"
+  },
+  "participants": [
+    { "id": "mac", "type": "backend", "label": "Farol on Mac", "sublabel": "RemoteBridge + MacLink" },
+    { "id": "relay", "type": "messagebus", "label": "Relay", "sublabel": "rooms, cannot read" },
+    { "id": "phone", "type": "frontend", "label": "Farol on iPhone", "sublabel": "RemoteClient + PhoneLink" },
+    { "id": "apns", "type": "external", "label": "Apple APNs", "sublabel": "notifications" }
+  ],
+  "segments": [
+    { "from": 160, "to": 348, "label": "Pair, once" },
+    { "from": 366, "to": 442, "label": "Handshake" },
+    { "from": 460, "to": 564, "label": "Session" },
+    { "from": 582, "to": 658, "label": "Notify" }
+  ],
+  "messages": [
+    { "id": "qr", "from": "mac", "to": "phone", "y": 170, "label": "QR on screen: relay, Mac key, secret", "variant": "security" },
+    { "id": "mac-join", "from": "mac", "to": "relay", "y": 198, "label": "WSS /v1/rooms/{hash}/mac" },
+    { "id": "phone-join", "from": "phone", "to": "relay", "y": 226, "label": "WSS /v1/rooms/{hash}/phone" },
+    { "id": "joined", "from": "relay", "to": "mac", "y": 254, "label": "joined, phone #n", "variant": "return" },
+    { "id": "online", "from": "relay", "to": "phone", "y": 282, "label": "online", "variant": "return" },
+    { "id": "pair", "from": "phone", "to": "mac", "y": 310, "label": "pair: sealed with the QR secret", "variant": "security" },
+    { "id": "paired", "from": "mac", "to": "phone", "y": 338, "label": "paired", "variant": "return" },
+
+    { "id": "phone-hello", "from": "phone", "to": "mac", "y": 376, "label": "hello: public key + nonce" },
+    { "id": "mac-hello", "from": "mac", "to": "phone", "y": 404, "label": "hello, then key" },
+    { "id": "phone-key", "from": "phone", "to": "mac", "y": 432, "label": "key", "variant": "return" },
+
+    { "id": "phone-start", "from": "phone", "to": "mac", "y": 470, "label": "sealed: hello v1, notify, watch", "variant": "emphasis" },
+    { "id": "mac-state", "from": "mac", "to": "phone", "y": 498, "label": "sealed: sessions, screen", "variant": "emphasis" },
+    { "id": "phone-command", "from": "phone", "to": "mac", "y": 526, "label": "sealed: send, type or key", "variant": "emphasis" },
+    { "id": "mac-done", "from": "mac", "to": "phone", "y": 554, "label": "sealed: done", "variant": "return" },
+
+    { "id": "push-ask", "from": "mac", "to": "relay", "y": 592, "label": "push: token, waiting or done" },
+    { "id": "push-apple", "from": "relay", "to": "apns", "y": 620, "label": "notify, fixed words", "variant": "dashed" },
+    { "id": "push-deliver", "from": "apns", "to": "phone", "y": 648, "label": "notification", "variant": "dashed" }
+  ],
+  "activations": [
+    { "participant": "relay", "from": 193, "to": 626, "type": "messagebus" }
+  ],
+  "cards": [
+    { "dot": "rose", "title": "Pair, once", "items": ["Only the QR arrow skips the relay", "The secret in the code is what lets a phone pair", "The Mac remembers the phone's public key"] },
+    { "dot": "cyan", "title": "Handshake, every connection", "items": ["Hellos are in the clear: a key and a fresh nonce", "Each side sends an HPKE key the other opens", "Both streams are tied to both nonces, so a replay fails"] },
+    { "dot": "emerald", "title": "Session and notify", "items": ["Every Mac to phone arrow passes through the relay as bytes it cannot open", "Commands carry an id, so one sent twice is typed once", "The Mac picks waiting or done, the relay writes the words"] }
+  ]
+}

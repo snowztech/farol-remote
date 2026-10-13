@@ -40,6 +40,17 @@ public struct RemoteSession: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+/// A project or an agent a new task can use. The id means something to the Mac only, and the phone hands it back as it came.
+public struct RemoteChoice: Codable, Equatable, Identifiable, Hashable, Sendable {
+    public var id: String
+    public var name: String
+
+    public init(id: String, name: String) {
+        self.id = id
+        self.name = name
+    }
+}
+
 /// Something the phone asks of the Mac. The id is its own, so the Mac can tell a command sent twice from two commands.
 public struct RemoteCommand: Codable, Equatable, Sendable {
     public var id: UUID
@@ -60,6 +71,10 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         case notify(token: Data, sandbox: Bool, notices: [RemoteNotice]? = nil, key: Data? = nil)
         /// What scrolled off the top of a session's screen. Asked for once, when someone wants to read back.
         case history(session: UUID)
+        /// What a new task can be started in and with. Asked for when the phone opens its New task sheet.
+        case options
+        /// Starts an agent on a task in a new worktree. `project` and `agent` are ids from `options`.
+        case task(project: String, agent: String, text: String)
     }
 
     public init(id: UUID = UUID(), _ action: Action) {
@@ -76,6 +91,7 @@ public enum RemoteEvent: Codable, Equatable, Sendable {
     case screen(session: UUID, text: String)
     /// The lines above the screen, oldest first, as far back as fits in one message.
     case history(session: UUID, text: String)
+    case options(projects: [RemoteChoice], agents: [RemoteChoice], agent: String?)
     case done(command: UUID)
     case refused(command: UUID, reason: String)
 }

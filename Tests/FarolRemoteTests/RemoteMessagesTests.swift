@@ -13,7 +13,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
         .send(session: session, text: "yes, and run the tests\n"), .key(session: session, key: .interrupt),
         .notify(token: Data([0xAB, 0x01]), sandbox: true), .notify(token: Data([0xAB]), sandbox: false, notices: [.waiting]),
         .notify(token: Data([0xAB]), sandbox: false, notices: []), .notify(token: Data([1]), sandbox: true, notices: [.done], key: Data([7])),
-        .history(session: session), .type(session: session, text: "/"), .key(session: session, key: .backspace),
+        .history(session: session), .options, .task(project: "/Users/me/shelf", agent: "claude", text: "fix the flaky test"), .type(session: session, text: "/"), .key(session: session, key: .backspace),
     ] {
         let command = RemoteCommand(action)
         #expect(try roundTrip(command) == command)
@@ -26,6 +26,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     for event: RemoteEvent in [
         .hello(version: 1), .sessions([session]), .sessions([]), .screen(session: session.id, text: "❯ No, exit\n"),
         .done(command: command), .refused(command: command, reason: "Remote is off."), .history(session: session.id, text: "earlier\nlines"),
+        .options(projects: [RemoteChoice(id: "/Users/me/shelf", name: "shelf")], agents: [RemoteChoice(id: "a", name: "Claude Code")], agent: "a"),
     ] {
         #expect(try roundTrip(event) == event)
     }
