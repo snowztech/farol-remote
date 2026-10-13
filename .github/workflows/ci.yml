@@ -24,3 +24,18 @@ jobs:
           go-version-file: relay/go.mod
       - run: go vet ./...
       - run: go test -race ./...
+
+  farol:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: farol
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: farol/go.mod
+      # One test types into a real session.
+      - run: sudo apt-get update && sudo apt-get install -y tmux
+      - run: go vet ./...
+      - run: go test -race ./...

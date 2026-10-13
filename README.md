@@ -7,6 +7,7 @@ Everything that touches security is here, in one small place to read:
 - **`Sources/FarolRemote`** is the Swift package both apps use: the messages, pairing with a QR code, and the encryption.
 - **`relay/`** is the server in between, in Go. It joins a Mac with its phones and passes bytes it cannot read. It stores nothing.
 - **`Sources/RemoteProbe`** is a phone in a terminal, for testing without the iOS app.
+- **`farol/`** is the command for a machine that stays on, in Go. `farol host` plays the Mac's part there, with tmux for the sessions. See [farol/README.md](farol/README.md).
 
 ## How it is kept private
 
