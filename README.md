@@ -16,6 +16,12 @@ Everything that touches security is here, in one small place to read:
 
 One limit to know: if a Mac's own key were stolen later, traffic recorded from a phone to that Mac could be read. The design has not had an outside review yet.
 
+## Not done yet
+
+- A Mac proves itself to the relay. Today someone who learned a room's name could connect as that Mac and knock the real one off. They could read and send nothing, since the encryption is tied to keys they do not have.
+- The relay tells a Mac when Apple no longer knows a phone, so the Mac stops asking to notify one that removed the app.
+- An outside review of the pairing and the encryption.
+
 ## Try it
 
 ```sh
