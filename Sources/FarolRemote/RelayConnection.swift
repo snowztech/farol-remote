@@ -11,6 +11,10 @@ public final class RelayConnection: NSObject, URLSessionWebSocketDelegate {
     private var task: URLSessionWebSocketTask?
     private var running = false
     private var wait: TimeInterval = 1
+    private var answered = false
+    /// Under the relay's own 30 seconds, so a connection through a proxy that drops quiet ones stays up too.
+    private static let pingEvery: TimeInterval = 20
+    private static let answerWithin: TimeInterval = 10
 
     public init(url: URL) {
         self.url = url
@@ -69,9 +73,33 @@ public final class RelayConnection: NSObject, URLSessionWebSocketDelegate {
         wait = min(wait * 2, 30)
     }
 
+    /// A connection that died while the Mac slept or the network changed reads nothing and fails nothing.
+    /// A ping that gets no answer is the only way to learn of it.
+    private func ping(on task: URLSessionWebSocketTask) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.pingEvery) { [weak self] in
+            guard let self, self.task === task else { return }
+            self.answered = false
+            task.sendPing { [weak self] error in
+                DispatchQueue.main.async {
+                    guard let self, self.task === task, error == nil else { return }
+                    self.answered = true
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.answerWithin) { [weak self] in
+                guard let self, self.task === task else { return }
+                guard self.answered else {
+                    task.cancel()
+                    return self.lost()
+                }
+                self.ping(on: task)
+            }
+        }
+    }
+
     public func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
         guard webSocketTask === task else { return }
         wait = 1
         onState?(true)
+        ping(on: webSocketTask)
     }
 }

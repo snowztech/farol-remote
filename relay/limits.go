@@ -53,12 +53,15 @@ func (d *door) count() int {
 	return d.total
 }
 
-// address is where a request came from. Behind a host's proxy that is the first address the proxy passes on.
+// address is where a request came from. Behind a host's proxy that is what the proxy itself says:
+// X-Real-IP, or the last address in X-Forwarded-For. The ones before it are the client's own claim, and it could make a new one each time.
 // It is only counted, never logged.
 func address(req *http.Request) string {
+	if real := strings.TrimSpace(req.Header.Get("X-Real-IP")); real != "" {
+		return real
+	}
 	if forwarded := req.Header.Get("X-Forwarded-For"); forwarded != "" {
-		first, _, _ := strings.Cut(forwarded, ",")
-		return strings.TrimSpace(first)
+		return strings.TrimSpace(forwarded[strings.LastIndex(forwarded, ",")+1:])
 	}
 	host, _, err := net.SplitHostPort(req.RemoteAddr)
 	if err != nil {

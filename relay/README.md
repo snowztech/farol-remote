@@ -13,7 +13,7 @@ docker run -p 8080:8080 farol-relay
 
 Or without Docker: `go run .`. It listens on `PORT`, 8080 by default.
 
-Put it behind something that speaks TLS, then enter `wss://your.host` in Settings → Remote and turn Remote off and on.
+Put it behind something that speaks TLS and sets `X-Real-IP` or adds to `X-Forwarded-For`, which is how the relay counts connections from one address. Then enter `wss://your.host` in Settings → Remote and turn Remote off and on.
 
 ## Notifications
 
