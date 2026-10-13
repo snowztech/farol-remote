@@ -1,4 +1,4 @@
-module github.com/snowztech/farol-remote/farol
+module github.com/snowztech/farol-remote/cli
 
 go 1.25.0
 

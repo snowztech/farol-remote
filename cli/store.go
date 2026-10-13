@@ -9,24 +9,25 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 )
 
 // A store is the folder this host keeps its key and its paired phones in. Only the user who runs the host can read it.
-// `farol host pair` and the running host are two processes, and this folder is how one tells the other of a code.
+// `farol-remote pair` and the running host are two processes, and this folder is how one tells the other of a code.
 type store struct {
 	dir string
 }
 
-// openStore uses FAROL_HOST_DIR when set, and the user's config folder otherwise.
+// openStore uses FAROL_REMOTE_DIR when set, and the user's config folder otherwise.
 func openStore() (store, error) {
-	dir := os.Getenv("FAROL_HOST_DIR")
+	dir := os.Getenv("FAROL_REMOTE_DIR")
 	if dir == "" {
 		config, err := os.UserConfigDir()
 		if err != nil {
 			return store{}, err
 		}
-		dir = filepath.Join(config, "farol-host")
+		dir = filepath.Join(config, "farol-remote")
 	}
 	return store{dir}, os.MkdirAll(dir, 0o700)
 }
@@ -109,4 +110,17 @@ func (s store) offer() (offer, bool) {
 
 func (s store) spendOffer() {
 	os.Remove(filepath.Join(s.dir, "offer.json"))
+}
+
+// Kept open for as long as the host runs, which is what holds the lock.
+var lockFile *os.File
+
+// lock is true for the one host that may run from this folder.
+func (s store) lock() bool {
+	file, err := os.OpenFile(filepath.Join(s.dir, "lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return false
+	}
+	lockFile = file
+	return syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB) == nil
 }

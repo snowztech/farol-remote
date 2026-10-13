@@ -1,4 +1,4 @@
-// farol is the command for a machine that stays on. farol host lets a paired phone see and type into the tmux sessions of a machine that stays on,
+// farol-remote lets a paired phone see and type into the tmux sessions of a machine that stays on,
 // the way Farol on a Mac does for its own sessions. It talks to the phone through the relay, which cannot read any of it.
 package main
 
@@ -16,49 +16,44 @@ import (
 	"github.com/mdp/qrterminal/v3"
 )
 
-const usage = `usage: farol host [-relay wss://your.relay] [pair | devices | forget <name>]
-       farol status working|waiting|done|clear|subagent-start|subagent-stop
-       farol version
+const usage = `usage: farol-remote [-relay wss://your.relay] [command]
 
-farol host lets a paired phone see and type into every tmux session on this machine.
+The Farol Remote CLI, for a machine that stays on. It lets a paired phone see and type into every tmux session here.
 
-  farol host                 Let paired phones in. Shows a code when no phone is paired yet.
-  farol host pair            Show a code to scan from Farol on a phone. The host has to be running.
-  farol host devices         List the phones this host lets in.
-  farol host forget <name>   Stop letting a phone in.
-
-farol status reports what the agent in this session is doing, so the phone can show it.
-An agent's hooks call it. Outside tmux it does nothing, so hooks that call it are safe anywhere.
+  setup           Make this machine ready: connect your agents, keep farol-remote running, pair a phone.
+  (no command)    Let paired phones in. Shows a code when no phone is paired yet.
+  pair            Show a code to scan from Farol on a phone. farol-remote has to be running.
+  devices         List the phones this machine lets in.
+  forget <name>   Stop letting a phone in.
+  status <word>   Say what the agent in this session is doing: working, waiting, done or clear.
+                  An agent's hooks call it. Outside tmux it does nothing, so the hooks are safe anywhere.
+  version         Say which release this is.
 `
 
 // Set to the release's tag when it is built for one.
 var version = "dev"
 
 func main() {
-	flags := flag.NewFlagSet("farol host", flag.ExitOnError)
-	relay := flags.String("relay", env("FAROL_RELAY", "wss://relay.farol.sh"), "the relay that joins this host with its phones")
-	flags.Usage = func() { fmt.Fprint(os.Stderr, usage) }
-	switch {
-	case len(os.Args) == 2 && os.Args[1] == "version":
+	relay := flag.String("relay", env("FAROL_RELAY", "wss://relay.farol.sh"), "the relay that joins this host with its phones")
+	flag.Usage = func() { fmt.Fprint(os.Stderr, usage) }
+	flag.Parse()
+	if !strings.Contains(*relay, "://") {
+		*relay = "wss://" + *relay
+	}
+	switch flag.Arg(0) {
+	case "version":
 		fmt.Println(version)
 		return
-	case len(os.Args) == 3 && os.Args[1] == "status":
+	case "status":
 		// A hook must never fail the agent, so only a word that is not a status is an error.
-		if _, known := statuses[os.Args[2]]; !known && os.Args[2] != "subagent-stop" {
-			fmt.Fprintf(os.Stderr, "farol: unknown status %s\n\n%s", os.Args[2], usage)
+		if _, known := statuses[flag.Arg(1)]; !known && flag.Arg(1) != "subagent-stop" {
+			fmt.Fprintf(os.Stderr, "farol-remote: unknown status %s\n\n%s", flag.Arg(1), usage)
 			os.Exit(64)
 		}
 		if pane := os.Getenv("TMUX_PANE"); pane != "" {
-			setStatus(pane, os.Args[2])
+			setStatus(pane, flag.Arg(1))
 		}
 		return
-	case len(os.Args) < 2 || os.Args[1] != "host":
-		fmt.Fprint(os.Stderr, usage)
-		os.Exit(64)
-	}
-	flags.Parse(os.Args[2:])
-	if !strings.Contains(*relay, "://") {
-		*relay = "wss://" + *relay
 	}
 
 	store, err := openStore()
@@ -70,27 +65,25 @@ func main() {
 		log.Fatalf("this host's key could not be read: %v", err)
 	}
 
-	switch flags.Arg(0) {
+	switch flag.Arg(0) {
 	case "":
 		if _, err := exec.LookPath("tmux"); err != nil {
 			log.Fatal("tmux is not installed, and it is what runs the sessions")
+		}
+		// Two hosts with one key would keep taking the relay's connection from each other.
+		if !store.lock() {
+			log.Fatal("farol-remote is already running on this machine")
 		}
 		if len(store.devices()) == 0 {
 			showCode(store, *relay, key)
 		}
 		serve(newHost(key, store, newTmux()), *relay+"/v1/rooms/"+room(key.public)+"/mac")
-	case "pair":
-		before := store.devices()
-		shown := showCode(store, *relay, key)
-		for time.Now().Before(shown.expires()) {
-			time.Sleep(time.Second)
-			if now := store.devices(); len(now) > 0 && find(before, now[len(now)-1].Key) == nil {
-				fmt.Printf("Paired with %s.\n", now[len(now)-1].Name)
-				return
-			}
+	case "setup":
+		if setup(*relay) && len(store.devices()) == 0 {
+			pair(store, *relay, key)
 		}
-		fmt.Println("The code ran out. Is farol host running?")
-		os.Exit(1)
+	case "pair":
+		pair(store, *relay, key)
 	case "devices":
 		for _, d := range store.devices() {
 			fmt.Println(d.Name)
@@ -98,7 +91,7 @@ func main() {
 	case "forget":
 		kept := []device{}
 		for _, d := range store.devices() {
-			if d.Name != flags.Arg(1) {
+			if d.Name != flag.Arg(1) {
 				kept = append(kept, d)
 			}
 		}
@@ -106,7 +99,7 @@ func main() {
 			log.Fatal(err)
 		}
 	default:
-		flags.Usage()
+		flag.Usage()
 		os.Exit(64)
 	}
 }
@@ -116,6 +109,21 @@ func env(name, otherwise string) string {
 		return value
 	}
 	return otherwise
+}
+
+// pair shows a code and waits for the running host to say a phone scanned it.
+func pair(store store, relay string, key deviceKey) {
+	before := store.devices()
+	shown := showCode(store, relay, key)
+	for time.Now().Before(shown.expires()) {
+		time.Sleep(time.Second)
+		if now := store.devices(); len(now) > 0 && find(before, now[len(now)-1].Key) == nil {
+			fmt.Printf("Paired with %s.\n", now[len(now)-1].Name)
+			return
+		}
+	}
+	fmt.Println("The code ran out. Is farol-remote running?")
+	os.Exit(1)
 }
 
 func showCode(store store, relay string, key deviceKey) offer {
