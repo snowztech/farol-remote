@@ -32,7 +32,7 @@ Everything that touches security, in one small place to read.
 
 ![The Mac, the relay and the phone](docs/architecture.png)
 
-A server running `farol-remote` takes the place of the Mac in this picture. The relay and the phone do not tell them apart.
+A server running the `farol-remote` CLI connects the same way a Mac does. The relay and the phone do not tell them apart.
 
 ## How it is kept private
 
