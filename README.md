@@ -12,7 +12,7 @@ Pick where your agents run. The phone side is the same for both: open Farol on y
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/snowztech/farol-remote/main/install.sh | sh
-farol host
+farol host setup
 ```
 
 Every tmux session on that machine is then one the phone can open. The full steps are in [farol/README.md](farol/README.md).

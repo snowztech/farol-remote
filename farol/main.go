@@ -16,12 +16,13 @@ import (
 	"github.com/mdp/qrterminal/v3"
 )
 
-const usage = `usage: farol host [-relay wss://your.relay] [pair | devices | forget <name>]
+const usage = `usage: farol host [-relay wss://your.relay] [setup | pair | devices | forget <name>]
        farol status working|waiting|done|clear|subagent-start|subagent-stop
        farol version
 
 farol host lets a paired phone see and type into every tmux session on this machine.
 
+  farol host setup           Make this machine ready: connect your agents, keep the host running, pair a phone.
   farol host                 Let paired phones in. Shows a code when no phone is paired yet.
   farol host pair            Show a code to scan from Farol on a phone. The host has to be running.
   farol host devices         List the phones this host lets in.
@@ -75,22 +76,20 @@ func main() {
 		if _, err := exec.LookPath("tmux"); err != nil {
 			log.Fatal("tmux is not installed, and it is what runs the sessions")
 		}
+		// Two hosts with one key would keep taking the relay's connection from each other.
+		if !store.lock() {
+			log.Fatal("farol host is already running on this machine")
+		}
 		if len(store.devices()) == 0 {
 			showCode(store, *relay, key)
 		}
 		serve(newHost(key, store, newTmux()), *relay+"/v1/rooms/"+room(key.public)+"/mac")
-	case "pair":
-		before := store.devices()
-		shown := showCode(store, *relay, key)
-		for time.Now().Before(shown.expires()) {
-			time.Sleep(time.Second)
-			if now := store.devices(); len(now) > 0 && find(before, now[len(now)-1].Key) == nil {
-				fmt.Printf("Paired with %s.\n", now[len(now)-1].Name)
-				return
-			}
+	case "setup":
+		if setup(*relay) && len(store.devices()) == 0 {
+			pair(store, *relay, key)
 		}
-		fmt.Println("The code ran out. Is farol host running?")
-		os.Exit(1)
+	case "pair":
+		pair(store, *relay, key)
 	case "devices":
 		for _, d := range store.devices() {
 			fmt.Println(d.Name)
@@ -116,6 +115,21 @@ func env(name, otherwise string) string {
 		return value
 	}
 	return otherwise
+}
+
+// pair shows a code and waits for the running host to say a phone scanned it.
+func pair(store store, relay string, key deviceKey) {
+	before := store.devices()
+	shown := showCode(store, relay, key)
+	for time.Now().Before(shown.expires()) {
+		time.Sleep(time.Second)
+		if now := store.devices(); len(now) > 0 && find(before, now[len(now)-1].Key) == nil {
+			fmt.Printf("Paired with %s.\n", now[len(now)-1].Name)
+			return
+		}
+	}
+	fmt.Println("The code ran out. Is farol host running?")
+	os.Exit(1)
 }
 
 func showCode(store store, relay string, key deviceKey) offer {

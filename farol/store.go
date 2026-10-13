@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 )
 
@@ -109,4 +110,17 @@ func (s store) offer() (offer, bool) {
 
 func (s store) spendOffer() {
 	os.Remove(filepath.Join(s.dir, "offer.json"))
+}
+
+// Kept open for as long as the host runs, which is what holds the lock.
+var lockFile *os.File
+
+// lock is true for the one host that may run from this folder.
+func (s store) lock() bool {
+	file, err := os.OpenFile(filepath.Join(s.dir, "lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return false
+	}
+	lockFile = file
+	return syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB) == nil
 }
