@@ -18,7 +18,7 @@ import (
 
 const usage = `usage: farol-remote [-relay wss://your.relay] [command]
 
-Farol Remote, for a machine that stays on. It lets a paired phone see and type into every tmux session here.
+The Farol Remote CLI, for a machine that stays on. It lets a paired phone see and type into every tmux session here.
 
   setup           Make this machine ready: connect your agents, keep farol-remote running, pair a phone.
   (no command)    Let paired phones in. Shows a code when no phone is paired yet.

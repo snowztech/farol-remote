@@ -25,7 +25,7 @@ Everything that touches security, in one small place to read.
 | --- | --- | --- |
 | `Sources/FarolRemote` | The Swift package the Mac and iPhone apps share: the messages, pairing and the encryption | |
 | `relay/` | The server in between, in Go. It passes bytes it cannot read and stores nothing | [relay/README.md](relay/README.md) |
-| `cli/` | `farol-remote`, the program for a server, in Go, and its installer. It plays the Mac's part there | [cli/README.md](cli/README.md) |
+| `cli/` | The `farol-remote` CLI, in Go, and its installer. It runs Farol Remote on a server, where it plays the Mac's part | [cli/README.md](cli/README.md) |
 | `Sources/RemoteProbe` | A phone in a terminal, for testing without the iPhone app | |
 
 ## How it works
@@ -53,7 +53,7 @@ One limit to know: if a Mac's own key were stolen later, traffic recorded from a
 ```sh
 swift test                      # the package
 cd relay && go test -race ./... # the relay
-cd cli && go test -race ./... # the program for a server
+cd cli && go test -race ./... # the farol-remote CLI
 ```
 
 ## License

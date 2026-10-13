@@ -1,6 +1,6 @@
-# Farol Remote, on a server
+# The farol-remote CLI
 
-`farol-remote` lets a paired phone see and type into the tmux sessions of a server, the way Farol on a Mac does for its own sessions. Your agents keep working, and you keep answering them, with the Mac closed or off.
+Runs Farol Remote on a server. `farol-remote` lets a paired phone see and type into the tmux sessions of a server, the way Farol on a Mac does for its own sessions. Your agents keep working, and you keep answering them, with the Mac closed or off.
 
 The phone reaches the server through the relay, as it reaches a Mac. Everything is encrypted between the two, so the relay cannot read it.
 
@@ -83,7 +83,7 @@ Scan the code it shows, then leave with `Ctrl-b d`.
 | `store.go` | The key, the paired phones and the code on screen |
 | `install.sh` | What `farol.sh/remote.sh` runs: it downloads a release and checks it |
 
-`testdata/swift.json` was written by the Swift package, from two keys made for the tests. The tests open it to prove a real phone and this program understand each other.
+`testdata/swift.json` was written by the Swift package, from two keys made for the tests. The tests open it to prove a real phone and this CLI understand each other.
 
 ```sh
 go test -race ./...

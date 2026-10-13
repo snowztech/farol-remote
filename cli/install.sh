@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs farol-remote, which lets a paired phone reach the agents on a machine that stays on.
+# Installs the farol-remote CLI, which lets a paired phone reach the agents on a machine that stays on.
 #   curl -fsSL https://farol.sh/remote.sh | sh
 # It downloads the latest release for this machine into ~/.local/bin, or FAROL_BIN when set.
 set -eu
