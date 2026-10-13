@@ -152,3 +152,16 @@ private struct Pair {
     let request = try JSONDecoder().decode([String: String].self, from: message.dropFirst())
     #expect(request == ["token": "ab01ff", "notice": "waiting", "sandbox": "1"])
 }
+
+@Test func aCommandThisMacDoesNotKnowIsRefused() throws {
+    var pair = Pair()
+    try pair.scanAndConnect()
+    let id = UUID()
+    let sealedUnknown = pair.phone.sealRaw(Data(#"{"id":"\#(id)","action":{"rename":{}}}"#.utf8))
+    pair.toMac([try #require(sealedUnknown)])
+    guard case .event(.refused(let command, _)) = pair.phoneSaw.last else {
+        Issue.record("the phone was not told")
+        return
+    }
+    #expect(command == id)
+}
