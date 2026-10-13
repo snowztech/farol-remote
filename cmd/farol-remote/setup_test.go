@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-const someFarol = "/home/me/.local/bin/farol"
+const someHost = "/home/me/.local/bin/farol-remote"
 
 func TestConnectingAnAgentKeepsWhatWasThereAndChangesNothingTheSecondTime(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "settings.json")
@@ -19,19 +19,19 @@ func TestConnectingAnAgentKeepsWhatWasThereAndChangesNothingTheSecondTime(t *tes
     "Stop": [
       {"hooks": [{"type": "command", "command": "say done && echo > /tmp/x"}]},
       {"hooks": [{"type": "command", "command": "[ -z \"$FAROL_CLI\" ] || \"$FAROL_CLI\" status done"}]},
-      {"hooks": [{"type": "command", "command": "\"/old/place/farol\" status done"}]}
+      {"hooks": [{"type": "command", "command": "\"/old/place/farol-remote\" status done"}]}
     ]
   }
 }`), 0o600)
 	events := agents("/home/me")[0].events
 
-	if err := connectFile(file, events, someFarol); err != nil {
+	if err := connectFile(file, events, someHost); err != nil {
 		t.Fatal(err)
 	}
 	first, _ := os.ReadFile(file)
 	text := string(first)
 	for _, kept := range []string{`"model": "opus"`, `10000000000000000001`, `say done && echo > /tmp/x`, `$FAROL_CLI\" status done`,
-		`\"/home/me/.local/bin/farol\" status waiting`, `"matcher": "permission_prompt|elicitation_dialog"`} {
+		`\"/home/me/.local/bin/farol-remote\" status waiting`, `"matcher": "permission_prompt|elicitation_dialog"`} {
 		if !strings.Contains(text, kept) {
 			t.Fatalf("%s is missing from\n%s", kept, text)
 		}
@@ -39,14 +39,14 @@ func TestConnectingAnAgentKeepsWhatWasThereAndChangesNothingTheSecondTime(t *tes
 	if strings.Contains(text, "/old/place") {
 		t.Fatal("the hook of an older install is still there")
 	}
-	if strings.Count(text, someFarol) != len(events) {
-		t.Fatalf("%d hooks of ours, for %d events", strings.Count(text, someFarol), len(events))
+	if strings.Count(text, someHost) != len(events) {
+		t.Fatalf("%d hooks of ours, for %d events", strings.Count(text, someHost), len(events))
 	}
 	if backup, _ := os.ReadFile(file + ".farol-backup"); !strings.Contains(string(backup), "/old/place") {
 		t.Fatal("the file as it was is not kept beside it")
 	}
 
-	if err := connectFile(file, events, someFarol); err != nil {
+	if err := connectFile(file, events, someHost); err != nil {
 		t.Fatal(err)
 	}
 	if second, _ := os.ReadFile(file); string(second) != text {
@@ -56,7 +56,7 @@ func TestConnectingAnAgentKeepsWhatWasThereAndChangesNothingTheSecondTime(t *tes
 
 func TestAnAgentWithNoSettingsYetGetsThem(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "hooks.json")
-	if err := connectFile(file, agents("/home/me")[1].events, someFarol); err != nil {
+	if err := connectFile(file, agents("/home/me")[1].events, someHost); err != nil {
 		t.Fatal(err)
 	}
 	if text, _ := os.ReadFile(file); !strings.Contains(string(text), `status clear`) {
@@ -67,7 +67,7 @@ func TestAnAgentWithNoSettingsYetGetsThem(t *testing.T) {
 func TestSettingsThatDoNotReadAreLeftAlone(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "settings.json")
 	os.WriteFile(file, []byte(`{"hooks": `), 0o600)
-	if err := connectFile(file, agents("/home/me")[0].events, someFarol); err == nil {
+	if err := connectFile(file, agents("/home/me")[0].events, someHost); err == nil {
 		t.Fatal("no error")
 	}
 	if text, _ := os.ReadFile(file); string(text) != `{"hooks": ` {
@@ -76,21 +76,21 @@ func TestSettingsThatDoNotReadAreLeftAlone(t *testing.T) {
 }
 
 func TestTheServiceRunsTheHostWithTheSamePathAndRelay(t *testing.T) {
-	mine := unit(someFarol, "wss://relay.farol.sh", "/usr/bin:/opt/bin", "/home/me", "", false)
-	for _, line := range []string{`ExecStart="/home/me/.local/bin/farol" host`, `Environment="PATH=/usr/bin:/opt/bin"`,
+	mine := unit(someHost, "wss://relay.farol.sh", "/usr/bin:/opt/bin", "/home/me", "", false)
+	for _, line := range []string{`ExecStart="/home/me/.local/bin/farol-remote"`, `Environment="PATH=/usr/bin:/opt/bin"`,
 		`Environment="FAROL_RELAY=wss://relay.farol.sh"`, "Restart=always", "WantedBy=default.target"} {
 		if !strings.Contains(mine, line) {
 			t.Fatalf("%s is missing from\n%s", line, mine)
 		}
 	}
-	roots := unit("/usr/local/bin/farol", "wss://relay.farol.sh", "/usr/bin", "/root", "/var/lib/farol", true)
-	if !strings.Contains(roots, "WantedBy=multi-user.target") || !strings.Contains(roots, `Environment="FAROL_HOST_DIR=/var/lib/farol"`) {
+	roots := unit("/usr/local/bin/farol-remote", "wss://relay.farol.sh", "/usr/bin", "/root", "/var/lib/farol", true)
+	if !strings.Contains(roots, "WantedBy=multi-user.target") || !strings.Contains(roots, `Environment="FAROL_REMOTE_DIR=/var/lib/farol"`) {
 		t.Fatalf("got\n%s", roots)
 	}
 }
 
 func TestOnlyOneHostRunsFromAFolder(t *testing.T) {
-	t.Setenv("FAROL_HOST_DIR", t.TempDir())
+	t.Setenv("FAROL_REMOTE_DIR", t.TempDir())
 	first, _ := openStore()
 	if !first.lock() {
 		t.Fatal("the first host could not start")

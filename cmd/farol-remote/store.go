@@ -14,20 +14,20 @@ import (
 )
 
 // A store is the folder this host keeps its key and its paired phones in. Only the user who runs the host can read it.
-// `farol host pair` and the running host are two processes, and this folder is how one tells the other of a code.
+// `farol-remote pair` and the running host are two processes, and this folder is how one tells the other of a code.
 type store struct {
 	dir string
 }
 
-// openStore uses FAROL_HOST_DIR when set, and the user's config folder otherwise.
+// openStore uses FAROL_REMOTE_DIR when set, and the user's config folder otherwise.
 func openStore() (store, error) {
-	dir := os.Getenv("FAROL_HOST_DIR")
+	dir := os.Getenv("FAROL_REMOTE_DIR")
 	if dir == "" {
 		config, err := os.UserConfigDir()
 		if err != nil {
 			return store{}, err
 		}
-		dir = filepath.Join(config, "farol-host")
+		dir = filepath.Join(config, "farol-remote")
 	}
 	return store{dir}, os.MkdirAll(dir, 0o700)
 }

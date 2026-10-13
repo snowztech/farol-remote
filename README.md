@@ -11,11 +11,11 @@ Pick where your agents run. The phone side is the same for both: open Farol on y
 **On a server that stays on.** For agents that keep working with the Mac closed or off. With tmux installed:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/snowztech/farol-remote/main/install.sh | sh
-farol host setup
+curl -fsSL https://farol.sh/remote.sh | sh
+farol-remote setup
 ```
 
-Every tmux session on that machine is then one the phone can open. The full steps are in [farol/README.md](farol/README.md).
+Every tmux session on that machine is then one the phone can open. The full steps are in [cmd/farol-remote/README.md](cmd/farol-remote/README.md).
 
 ## What is in this repo
 
@@ -25,14 +25,14 @@ Everything that touches security, in one small place to read.
 | --- | --- | --- |
 | `Sources/FarolRemote` | The Swift package the Mac and iPhone apps share: the messages, pairing and the encryption | |
 | `relay/` | The server in between, in Go. It passes bytes it cannot read and stores nothing | [relay/README.md](relay/README.md) |
-| `farol/` | The `farol` command for a server, in Go. `farol host` plays the Mac's part there | [farol/README.md](farol/README.md) |
+| `cmd/farol-remote/` | `farol-remote`, the program for a server, in Go. It plays the Mac's part there | [cmd/farol-remote/README.md](cmd/farol-remote/README.md) |
 | `Sources/RemoteProbe` | A phone in a terminal, for testing without the iPhone app | |
 
 ## How it works
 
 ![The Mac, the relay and the phone](docs/architecture.png)
 
-A server running `farol host` takes the place of the Mac in this picture. The relay and the phone do not tell them apart.
+A server running `farol-remote` takes the place of the Mac in this picture. The relay and the phone do not tell them apart.
 
 ## How it is kept private
 
@@ -53,7 +53,7 @@ One limit to know: if a Mac's own key were stolen later, traffic recorded from a
 ```sh
 swift test                      # the package
 cd relay && go test -race ./... # the relay
-cd farol && go test -race ./... # the farol command
+cd cmd/farol-remote && go test -race ./... # the program for a server
 ```
 
 ## License

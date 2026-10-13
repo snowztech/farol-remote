@@ -82,7 +82,7 @@ func (t *tmux) sessions() []session {
 // sessionID is the id a phone knows a session by. tmux counts sessions from zero after a restart,
 // so the time the session was made is part of it, and an old id never means a new session.
 func sessionID(tmuxID, created string) string {
-	sum := sha256.Sum256([]byte("farol-host " + tmuxID + " " + created))
+	sum := sha256.Sum256([]byte("farol-remote " + tmuxID + " " + created))
 	return strings.ToUpper(fmt.Sprintf("%x-%x-%x-%x-%x", sum[:4], sum[4:6], sum[6:8], sum[8:10], sum[10:16]))
 }
 
@@ -128,11 +128,11 @@ func (t *tmux) paste(id, text string) bool {
 	if !ok {
 		return false
 	}
-	if _, err := run(text, "tmux", "load-buffer", "-b", "farol-host", "-"); err != nil {
+	if _, err := run(text, "tmux", "load-buffer", "-b", "farol-remote", "-"); err != nil {
 		return false
 	}
 	// -p pastes the way a terminal does, so an agent takes it as one piece and not as keys.
-	_, err := run("", "tmux", "paste-buffer", "-d", "-p", "-b", "farol-host", "-t", target)
+	_, err := run("", "tmux", "paste-buffer", "-d", "-p", "-b", "farol-remote", "-t", target)
 	return err == nil
 }
 
@@ -161,7 +161,7 @@ const statusOption = "@farol_status"
 // What each word an agent's hook says leaves the session showing. Empty goes back to idle.
 var statuses = map[string]string{"working": "working", "waiting": "waiting", "done": "done", "clear": "", "subagent-start": "working"}
 
-// setStatus is `farol status`, called by an agent's hooks from inside a session. pane is tmux's own name for where it runs.
+// setStatus is `farol-remote status`, called by an agent's hooks from inside a session. pane is tmux's own name for where it runs.
 // False is for a word that is not one of the hooks'.
 func setStatus(pane, event string) bool {
 	status, known := statuses[event]

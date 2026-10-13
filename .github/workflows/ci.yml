@@ -25,16 +25,16 @@ jobs:
       - run: go vet ./...
       - run: go test -race ./...
 
-  farol:
+  farol-remote:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: farol
+        working-directory: cmd/farol-remote
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
-          go-version-file: farol/go.mod
+          go-version-file: cmd/farol-remote/go.mod
       # One test types into a real session.
       - run: sudo apt-get update && sudo apt-get install -y tmux
       - run: go vet ./...
