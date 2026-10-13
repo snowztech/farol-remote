@@ -153,8 +153,13 @@ func TestCountsTheAddressAProxyPassesOn(t *testing.T) {
 	if got := address(req); got != "10.0.0.1" {
 		t.Fatalf("got %q", got)
 	}
-	req.Header.Set("X-Forwarded-For", "203.0.113.7, 10.0.0.1")
+	// The first address is the client's own claim, and the last is what the proxy saw.
+	req.Header.Set("X-Forwarded-For", "198.51.100.9, 203.0.113.7")
 	if got := address(req); got != "203.0.113.7" {
+		t.Fatalf("got %q", got)
+	}
+	req.Header.Set("X-Real-IP", "203.0.113.8")
+	if got := address(req); got != "203.0.113.8" {
 		t.Fatalf("got %q", got)
 	}
 }
