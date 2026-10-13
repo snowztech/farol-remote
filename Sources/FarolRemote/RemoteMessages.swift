@@ -55,7 +55,8 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         /// Typed as keys, one after the other, so a program that reacts to each one does: a menu to a digit, an agent to a slash.
         case type(session: UUID, text: String)
         /// Where Apple can reach this phone with a notification. `sandbox` is true for a build run from Xcode.
-        case notify(token: Data, sandbox: Bool)
+        /// `notices` is what the phone wants to hear about. An older phone leaves it out, and hears about everything.
+        case notify(token: Data, sandbox: Bool, notices: [RemoteNotice]? = nil)
     }
 
     public init(id: UUID = UUID(), _ action: Action) {

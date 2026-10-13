@@ -11,7 +11,8 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     for action: RemoteCommand.Action in [
         .hello(version: RemoteProtocol.version), .watch(session: session), .watch(session: nil),
         .send(session: session, text: "yes, and run the tests\n"), .key(session: session, key: .interrupt),
-        .notify(token: Data([0xAB, 0x01]), sandbox: true), .type(session: session, text: "/"), .key(session: session, key: .backspace),
+        .notify(token: Data([0xAB, 0x01]), sandbox: true), .notify(token: Data([0xAB]), sandbox: false, notices: [.waiting]),
+        .notify(token: Data([0xAB]), sandbox: false, notices: []), .type(session: session, text: "/"), .key(session: session, key: .backspace),
     ] {
         let command = RemoteCommand(action)
         #expect(try roundTrip(command) == command)
@@ -49,4 +50,10 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     // The oldest is dropped to stay within the limit, so it counts as new again.
     let results = [seen.insert(first), seen.insert(UUID()), seen.insert(UUID()), seen.insert(first)]
     #expect(results == [true, true, true, true])
+}
+
+@Test func anOlderPhoneThatNamesNoNoticesStillReads() throws {
+    let old = Data(#"{"id":"6F0C6F5E-4C7C-4B62-9D5B-0E5B0C1E2A11","action":{"notify":{"token":"qw==","sandbox":false}}}"#.utf8)
+    let command = try JSONDecoder().decode(RemoteCommand.self, from: old)
+    #expect(command.action == .notify(token: Data([0xAB]), sandbox: false, notices: nil))
 }
