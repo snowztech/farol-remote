@@ -1,26 +1,36 @@
-# farol, for a machine that stays on
+# farol host
 
-`farol host` lets a paired phone see and type into the tmux sessions of a server, the way Farol on a Mac does for its own sessions. Your agents keep working, and you keep answering them, with the Mac closed or off.
+Lets a paired phone see and type into the tmux sessions of a server, the way Farol on a Mac does for its own sessions. Your agents keep working, and you keep answering them, with the Mac closed or off.
 
-The phone reaches the host through the relay, as it reaches a Mac. Everything is encrypted between the phone and the host, so the relay cannot read it.
+The phone reaches the server through the relay, as it reaches a Mac. Everything is encrypted between the two, so the relay cannot read it.
 
 ## Set it up
 
-On the machine that stays on, with [tmux](https://github.com/tmux/tmux) installed:
+You need a machine that stays on, with [tmux](https://github.com/tmux/tmux) installed, and Farol on your iPhone.
+
+**1. Install.** This puts `farol` in `~/.local/bin`. Run it again later to update.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/snowztech/farol-remote/main/install.sh | sh
+```
+
+**2. Start the host and pair your phone.** Run it inside tmux, so it keeps going after you log out.
+
+```sh
+tmux new -s farol
 farol host
 ```
 
-The first run shows a code. Scan it from Farol on your phone. From then on, every tmux session on that machine is one the phone can open:
+It shows a code. Scan it from Farol on your phone, then leave with `Ctrl-b d`.
+
+**3. Start an agent.** Every tmux session on the machine is one the phone can open.
 
 ```sh
 tmux new -s api -c ~/code/api
 claude
 ```
 
-Leave `farol host` running, in a tmux session of its own or as a service.
+A phone knows one Mac or one server at a time. Scanning a server's code takes it away from your Mac, and scanning the Mac's code brings it back.
 
 ## Commands
 
@@ -35,23 +45,36 @@ Leave `farol host` running, in a tmux session of its own or as a service.
 
 A code works once and lasts two minutes. Whoever scans it can type into your sessions, so show it to nobody else.
 
-To use a relay of your own, run `farol host -relay wss://your.host` or set `FAROL_RELAY`. A phone stays with the relay it was paired through.
-
 ## Showing what an agent is doing
 
-`farol status working`, `waiting`, `done` and `clear` set what the phone shows for the session they are run in. They are the same words Farol on a Mac takes, so the hooks you use there work here unchanged. Outside tmux the command does nothing.
+Without this a session always shows as idle. An agent's hooks tell the phone more by running `farol status` with `working`, `waiting`, `done` or `clear`. For Claude Code, in `~/.claude/settings.json` on the server:
 
-## What it keeps
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "farol status working" }] }],
+    "Notification": [{ "matcher": "permission_prompt|elicitation_dialog", "hooks": [{ "type": "command", "command": "farol status waiting" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "farol status done" }] }],
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "farol status clear" }] }]
+  }
+}
+```
 
-The host's key and the phones it paired, in `farol-host` under your config folder, readable by you alone. `FAROL_HOST_DIR` puts them elsewhere.
+Outside tmux the command does nothing, so the hooks are safe anywhere.
+
+## Good to know
+
+- **A relay of your own.** Run `farol host -relay wss://your.host` or set `FAROL_RELAY`. A phone stays with the relay it was paired through. See [relay/README.md](../relay/README.md).
+- **What it keeps.** The host's key and the phones it paired, in `farol-host` under your config folder, readable by you alone. `FAROL_HOST_DIR` puts them elsewhere.
+- **Removing it.** Delete `~/.local/bin/farol` and that folder.
 
 ## Not done yet
 
 - Notifications when an agent waits or finishes.
 - Starting a task from the phone.
-- A phone paired with a Mac and a host at the same time. Today a phone knows one of them.
+- A phone paired with a Mac and a server at the same time.
 
-## How it is laid out
+## Work on it
 
 | File | What it holds |
 | --- | --- |
@@ -64,4 +87,7 @@ The host's key and the phones it paired, in `farol-host` under your config folde
 
 `testdata/swift.json` was written by the Swift package, from two keys made for the tests. The tests open it to prove a real phone and this host understand each other.
 
-To build it yourself: `go install github.com/snowztech/farol-remote/farol@latest`.
+```sh
+go test -race ./...
+go install github.com/snowztech/farol-remote/farol@latest   # build it yourself
+```
