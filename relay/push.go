@@ -75,23 +75,32 @@ type pushRequest struct {
 	Token   string `json:"token"`
 	Notice  string `json:"notice"`
 	Sandbox string `json:"sandbox"`
+	// Which session it is about, sealed by the Mac for the phone. The relay cannot open it, and only passes it on.
+	Sealed string `json:"sealed"`
 }
+
+var sealedText = regexp.MustCompile(`^[A-Za-z0-9+/=]*$`)
 
 var deviceToken = regexp.MustCompile(`^[0-9a-f]{64,200}$`)
 
 // send asks Apple to show one notification. What a Mac sent is checked first, since anyone can connect as a Mac.
-func (p *pusher) send(ctx context.Context, payload []byte) error {
+func (p *pusher) send(ctx context.Context, asked []byte) error {
 	var request pushRequest
-	if err := json.Unmarshal(payload, &request); err != nil {
+	if err := json.Unmarshal(asked, &request); err != nil {
 		return err
 	}
 	words, known := notices[request.Notice]
-	if !known || !deviceToken.MatchString(request.Token) {
+	if !known || !deviceToken.MatchString(request.Token) || len(request.Sealed) > 2000 || !sealedText.MatchString(request.Sealed) {
 		return errors.New("not a notification this relay sends")
 	}
-	body, _ := json.Marshal(map[string]any{
-		"aps": map[string]any{"alert": map[string]string{"title": "Farol", "body": words}, "sound": "default"},
-	})
+	aps := map[string]any{"alert": map[string]string{"title": "Farol", "body": words}, "sound": "default"}
+	payload := map[string]any{"aps": aps}
+	if request.Sealed != "" {
+		// Lets the app open what is sealed and show the session's name. If it cannot, the words above are shown.
+		aps["mutable-content"] = 1
+		payload["farol"] = request.Sealed
+	}
+	body, _ := json.Marshal(payload)
 	host := p.production
 	if request.Sandbox != "" {
 		host = p.sandbox

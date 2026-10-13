@@ -34,8 +34,10 @@ public enum RelayFrame: Equatable, Sendable {
     }
 
     /// What a Mac sends to have Apple notify one of its phones. The relay holds the key Apple asks for, and writes the words.
-    public static func push(token: Data, sandbox: Bool, notice: RemoteNotice) -> Data {
-        let request = ["token": token.map { String(format: "%02x", $0) }.joined(), "notice": notice.rawValue, "sandbox": sandbox ? "1" : ""]
+    /// `sealed` is which session it is about, from `NoticeBox`, which the relay passes on without being able to read.
+    public static func push(token: Data, sandbox: Bool, notice: RemoteNotice, sealed: Data? = nil) -> Data {
+        var request = ["token": token.map { String(format: "%02x", $0) }.joined(), "notice": notice.rawValue, "sandbox": sandbox ? "1" : ""]
+        if let sealed { request["sealed"] = sealed.base64EncodedString() }
         return Data([5]) + ((try? JSONEncoder().encode(request)) ?? Data())
     }
 

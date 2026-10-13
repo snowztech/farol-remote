@@ -139,3 +139,19 @@ func TestSaysWhyAppleRefused(t *testing.T) {
 		t.Fatalf("error was %v", err)
 	}
 }
+
+func TestPassesOnWhatIsSealedWithoutReadingIt(t *testing.T) {
+	p, calls := apple(t)
+	asked, _ := json.Marshal(pushRequest{Token: someToken, Notice: "waiting", Sealed: "AQID+/8="})
+	if err := p.send(context.Background(), asked); err != nil {
+		t.Fatal(err)
+	}
+	got := <-calls
+	if !strings.Contains(got.body, `"farol":"AQID+/8="`) || !strings.Contains(got.body, `"mutable-content":1`) {
+		t.Fatalf("said %s", got.body)
+	}
+	bad, _ := json.Marshal(pushRequest{Token: someToken, Notice: "waiting", Sealed: `","aps":{}`})
+	if err := p.send(context.Background(), bad); err == nil {
+		t.Fatal("something that is not sealed bytes was passed on")
+	}
+}

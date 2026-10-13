@@ -56,7 +56,10 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         case type(session: UUID, text: String)
         /// Where Apple can reach this phone with a notification. `sandbox` is true for a build run from Xcode.
         /// `notices` is what the phone wants to hear about. An older phone leaves it out, and hears about everything.
-        case notify(token: Data, sandbox: Bool, notices: [RemoteNotice]? = nil)
+        /// `key` lets the Mac seal which session a notification is about, so only this phone can read it.
+        case notify(token: Data, sandbox: Bool, notices: [RemoteNotice]? = nil, key: Data? = nil)
+        /// What scrolled off the top of a session's screen. Asked for once, when someone wants to read back.
+        case history(session: UUID)
     }
 
     public init(id: UUID = UUID(), _ action: Action) {
@@ -71,6 +74,8 @@ public enum RemoteEvent: Codable, Equatable, Sendable {
     case hello(version: Int)
     case sessions([RemoteSession])
     case screen(session: UUID, text: String)
+    /// The lines above the screen, oldest first, as far back as fits in one message.
+    case history(session: UUID, text: String)
     case done(command: UUID)
     case refused(command: UUID, reason: String)
 }
