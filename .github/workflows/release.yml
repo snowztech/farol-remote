@@ -1,0 +1,31 @@
+name: Release
+
+# A tag like v0.2.0 builds farol for the machines a host runs on, and attaches the builds to the release install.sh downloads from.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  farol:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: farol/go.mod
+      - name: Build
+        working-directory: farol
+        run: |
+          for target in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
+            GOOS=${target%/*} GOARCH=${target#*/} CGO_ENABLED=0 \
+              go build -trimpath -ldflags="-s -w" -o "../dist/farol-${target%/*}-${target#*/}" .
+          done
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" dist/* --clobber
