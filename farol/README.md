@@ -31,6 +31,7 @@ Leave `farol host` running, in a tmux session of its own or as a service.
 | `farol host devices` | Lists the phones this host lets in. |
 | `farol host forget <name>` | Stops letting a phone in. One that is connected is cut off at once. |
 | `farol status <word>` | Says what the agent in this session is doing. An agent's hooks call it. |
+| `farol version` | Says which release this is. |
 
 A code works once and lasts two minutes. Whoever scans it can type into your sessions, so show it to nobody else.
 

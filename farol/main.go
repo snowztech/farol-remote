@@ -18,6 +18,7 @@ import (
 
 const usage = `usage: farol host [-relay wss://your.relay] [pair | devices | forget <name>]
        farol status working|waiting|done|clear|subagent-start|subagent-stop
+       farol version
 
 farol host lets a paired phone see and type into every tmux session on this machine.
 
@@ -30,11 +31,17 @@ farol status reports what the agent in this session is doing, so the phone can s
 An agent's hooks call it. Outside tmux it does nothing, so hooks that call it are safe anywhere.
 `
 
+// Set to the release's tag when it is built for one.
+var version = "dev"
+
 func main() {
 	flags := flag.NewFlagSet("farol host", flag.ExitOnError)
 	relay := flags.String("relay", env("FAROL_RELAY", "wss://relay.farol.sh"), "the relay that joins this host with its phones")
 	flags.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 	switch {
+	case len(os.Args) == 2 && os.Args[1] == "version":
+		fmt.Println(version)
+		return
 	case len(os.Args) == 3 && os.Args[1] == "status":
 		// A hook must never fail the agent, so only a word that is not a status is an error.
 		if _, known := statuses[os.Args[2]]; !known && os.Args[2] != "subagent-stop" {

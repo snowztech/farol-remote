@@ -21,8 +21,10 @@ jobs:
         run: |
           for target in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
             GOOS=${target%/*} GOARCH=${target#*/} CGO_ENABLED=0 \
-              go build -trimpath -ldflags="-s -w" -o "../dist/farol-${target%/*}-${target#*/}" .
+              go build -trimpath -ldflags="-s -w -X main.version=$GITHUB_REF_NAME" -o "../dist/farol-${target%/*}-${target#*/}" .
           done
+          # What install.sh checks a download against.
+          cd ../dist && sha256sum farol-* > checksums.txt
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ github.token }}
