@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"log"
 	"net/http"
 	"regexp"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -23,6 +25,13 @@ type relay struct {
 	rooms map[string]*room
 	// Nil when the relay has no key from Apple, and then it sends no notifications.
 	push *pusher
+	door *door
+	// Counted for the log, which says how much the relay does and never for whom.
+	sent, failed atomic.Int64
+}
+
+func newRelay(push *pusher) *relay {
+	return &relay{rooms: map[string]*room{}, push: push, door: newDoor()}
 }
 
 // A room is named by the hash of its Mac's public key, which only that Mac and its phones know.
@@ -41,6 +50,12 @@ func (r *relay) join(w http.ResponseWriter, req *http.Request) {
 		http.NotFound(w, req)
 		return
 	}
+	from := address(req)
+	if !r.door.enter(from) {
+		http.Error(w, "the relay is full, try again later", http.StatusServiceUnavailable)
+		return
+	}
+	defer r.door.leave(from)
 	conn, err := websocket.Accept(w, req, nil)
 	if err != nil {
 		return
@@ -86,8 +101,11 @@ func (r *relay) serveMac(ctx context.Context, name string, mac *peer) {
 			// Apple can be slow, and the Mac's other messages must not wait for it.
 			go func(payload []byte) {
 				if err := r.push.send(context.Background(), payload); err != nil {
+					r.failed.Add(1)
 					log.Printf("notification not sent: %v", err)
+					return
 				}
+				r.sent.Add(1)
 			}(message[1:])
 			return
 		}
@@ -168,5 +186,21 @@ func (r *relay) room(name string) *room {
 func (r *relay) forget(name string, rm *room) {
 	if rm.mac == nil && len(rm.phones) == 0 && r.rooms[name] == rm {
 		delete(r.rooms, name)
+	}
+}
+
+// report writes how busy the relay is, every so often and only when that changed.
+// Counts are all it says: no room, no address, no token ever reaches the log.
+func (r *relay) report(every time.Duration) {
+	last := ""
+	for range time.Tick(every) {
+		r.mu.Lock()
+		rooms := len(r.rooms)
+		r.mu.Unlock()
+		now := fmt.Sprintf("%d rooms, %d connections, %d notifications sent, %d not sent", rooms, r.door.count(), r.sent.Load(), r.failed.Load())
+		if now != last {
+			log.Print(now)
+			last = now
+		}
 	}
 }

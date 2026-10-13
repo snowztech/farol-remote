@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
 func main() {
@@ -17,7 +18,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	r := &relay{rooms: map[string]*room{}, push: push}
+	r := newRelay(push)
+	go r.report(10 * time.Minute)
 	log.Printf("farol relay on %s, notifications %s", address, map[bool]string{true: "on", false: "off"}[push != nil])
-	log.Fatal(http.ListenAndServe(address, r.handler()))
+	// A client that opens a connection and never finishes asking is dropped, so it cannot hold a place for free.
+	server := &http.Server{Addr: address, Handler: r.handler(), ReadHeaderTimeout: 10 * time.Second}
+	log.Fatal(server.ListenAndServe())
 }

@@ -90,7 +90,7 @@ func TestOnlySendsItsOwnWordsToRealTokens(t *testing.T) {
 
 func TestAMacAsksThroughItsConnection(t *testing.T) {
 	p, calls := apple(t)
-	server := httptest.NewServer((&relay{rooms: map[string]*room{}, push: p}).handler())
+	server := httptest.NewServer(newRelay(p).handler())
 	t.Cleanup(server.Close)
 	mac := dial(t, "ws"+strings.TrimPrefix(server.URL, "http"), "mac")
 	mac.send(append([]byte{framePush}, request("waiting", "")...))
@@ -114,4 +114,28 @@ func TestWithoutAKeyNothingIsSent(t *testing.T) {
 	phone.expect([]byte{frameOnline})
 	phone.send(append([]byte{frameData}, "still here"...))
 	mac.expect(numbered(frameData, 1, []byte("still here")))
+}
+
+func TestAFailureNeverPutsTheTokenInTheLog(t *testing.T) {
+	p, _ := apple(t)
+	// Nothing listens here, so the call fails the way a network problem would.
+	p.production = "http://127.0.0.1:1"
+	err := p.send(context.Background(), request("waiting", ""))
+	if err == nil || strings.Contains(err.Error(), someToken) {
+		t.Fatalf("error was %v", err)
+	}
+}
+
+func TestSaysWhyAppleRefused(t *testing.T) {
+	p, _ := apple(t)
+	refusing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"reason":"BadDeviceToken"}`))
+	}))
+	t.Cleanup(refusing.Close)
+	p.production = refusing.URL
+	err := p.send(context.Background(), request("waiting", ""))
+	if err == nil || !strings.Contains(err.Error(), "BadDeviceToken") || strings.Contains(err.Error(), someToken) {
+		t.Fatalf("error was %v", err)
+	}
 }

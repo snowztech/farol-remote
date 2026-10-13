@@ -28,6 +28,21 @@ The relay asks Apple to notify a phone when the Mac says an agent is waiting or 
 
 A notification says "An agent is waiting for you." or "An agent finished." and nothing else. The relay never learns which session, and a Mac cannot make it send other words.
 
+## What it logs, and what it limits
+
+The log says how busy the relay is and nothing about who uses it: a line when it starts, a line of counts when they change, and a line when Apple refuses a notification, with Apple's reason. A room's name, an address and a phone's token are never written.
+
+To stay useful under abuse it turns away what a real Mac or phone never does:
+
+| Limit | Value |
+| --- | --- |
+| Connections in total | 5000 |
+| Connections from one address | 40 |
+| Size of one message | 256 KB |
+| What one connection may send | 512 KB a second, after a burst of 2 MB |
+| Notifications one Mac may ask for | 20 a minute |
+| Phones in one room | 8 |
+
 ## How it is laid out
 
 | File | What it holds |
@@ -36,6 +51,7 @@ A notification says "An agent is waiting for you." or "An agent finished." and n
 | `relay.go` | Rooms, and who a message goes to |
 | `peer.go` | One connection: reading, writing and its limits |
 | `push.go` | Asking Apple to notify a phone |
+| `limits.go` | Counting who is connected, and refusing past the limits |
 | `frames.go` | The one byte that says what a message is |
 
 `GET /healthz` answers `ok` for health checks.

@@ -20,7 +20,7 @@ type client struct {
 
 func serve(t *testing.T) string {
 	t.Helper()
-	server := httptest.NewServer((&relay{rooms: map[string]*room{}}).handler())
+	server := httptest.NewServer(newRelay(nil).handler())
 	t.Cleanup(server.Close)
 	return "ws" + strings.TrimPrefix(server.URL, "http")
 }
@@ -122,5 +122,39 @@ func TestOnlyRoomsAndSidesThatExist(t *testing.T) {
 		if _, _, err := websocket.Dial(context.Background(), base+path, nil); err == nil {
 			t.Fatalf("%s was accepted", path)
 		}
+	}
+}
+
+func TestOneAddressCannotFillTheRelay(t *testing.T) {
+	r := newRelay(nil)
+	r.door.maxEach = 2
+	server := httptest.NewServer(r.handler())
+	t.Cleanup(server.Close)
+	base := "ws" + strings.TrimPrefix(server.URL, "http")
+	dial(t, base, "phone")
+	second := dial(t, base, "phone")
+	if _, _, err := websocket.Dial(context.Background(), base+"/v1/rooms/"+someRoom+"/phone", nil); err == nil {
+		t.Fatal("a third connection from the same address was let in")
+	}
+	// A place frees up when someone leaves.
+	second.conn.Close(websocket.StatusNormalClosure, "")
+	for range 50 {
+		if r.door.count() == 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	dial(t, base, "phone")
+}
+
+func TestCountsTheAddressAProxyPassesOn(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "10.0.0.1:4000"
+	if got := address(req); got != "10.0.0.1" {
+		t.Fatalf("got %q", got)
+	}
+	req.Header.Set("X-Forwarded-For", "203.0.113.7, 10.0.0.1")
+	if got := address(req); got != "203.0.113.7" {
+		t.Fatalf("got %q", got)
 	}
 }

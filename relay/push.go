@@ -12,7 +12,9 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"sync"
@@ -107,11 +109,21 @@ func (p *pusher) send(ctx context.Context, payload []byte) error {
 	call.Header.Set("apns-push-type", "alert")
 	answer, err := p.client.Do(call)
 	if err != nil {
-		return err
+		// The error names the address it called, which ends in the phone's token. That has no place in a log.
+		var failed *url.Error
+		if errors.As(err, &failed) {
+			err = failed.Err
+		}
+		return fmt.Errorf("apple could not be reached: %w", err)
 	}
 	defer answer.Body.Close()
 	if answer.StatusCode != http.StatusOK {
-		return fmt.Errorf("apple answered %s", answer.Status)
+		// Apple says why in a word, like BadDeviceToken, which is what tells a wrong key from a stale phone.
+		var why struct {
+			Reason string `json:"reason"`
+		}
+		json.NewDecoder(io.LimitReader(answer.Body, 1024)).Decode(&why)
+		return fmt.Errorf("apple refused: %s %s", answer.Status, why.Reason)
 	}
 	return nil
 }
