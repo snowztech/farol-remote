@@ -1,13 +1,38 @@
 # Farol Remote
 
-How [Farol](https://github.com/snowztech/farol) on a Mac and a phone talk to each other, so you can answer your coding agents when you are away from the Mac.
+Answer your coding agents from your phone. [Farol](https://github.com/snowztech/farol) shows its sessions to a phone you paired and types what you reply. Everything is encrypted between the two, so nothing in between can read it.
 
-Everything that touches security is here, in one small place to read:
+## Use it
 
-- **`Sources/FarolRemote`** is the Swift package both apps use: the messages, pairing with a QR code, and the encryption.
-- **`relay/`** is the server in between, in Go. It joins a Mac with its phones and passes bytes it cannot read. It stores nothing.
-- **`Sources/RemoteProbe`** is a phone in a terminal, for testing without the iOS app.
-- **`farol/`** is the command for a machine that stays on, in Go. `farol host` plays the Mac's part there, with tmux for the sessions. See [farol/README.md](farol/README.md).
+Pick where your agents run. The phone side is the same for both: open Farol on your iPhone and scan the code.
+
+**On your Mac.** In Farol, open Settings → Remote, turn it on and show the code. The Mac has to stay on.
+
+**On a server that stays on.** For agents that keep working with the Mac closed or off. With tmux installed:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/snowztech/farol-remote/main/install.sh | sh
+farol host
+```
+
+Every tmux session on that machine is then one the phone can open. The full steps are in [farol/README.md](farol/README.md).
+
+## What is in this repo
+
+Everything that touches security, in one small place to read.
+
+| Folder | What it is | More |
+| --- | --- | --- |
+| `Sources/FarolRemote` | The Swift package the Mac and iPhone apps share: the messages, pairing and the encryption | |
+| `relay/` | The server in between, in Go. It passes bytes it cannot read and stores nothing | [relay/README.md](relay/README.md) |
+| `farol/` | The `farol` command for a server, in Go. `farol host` plays the Mac's part there | [farol/README.md](farol/README.md) |
+| `Sources/RemoteProbe` | A phone in a terminal, for testing without the iPhone app | |
+
+## How it works
+
+![The Mac, the relay and the phone](docs/architecture.png)
+
+A server running `farol host` takes the place of the Mac in this picture. The relay and the phone do not tell them apart.
 
 ## How it is kept private
 
@@ -23,14 +48,13 @@ One limit to know: if a Mac's own key were stolen later, traffic recorded from a
 - The relay tells a Mac when Apple no longer knows a phone, so the Mac stops asking to notify one that removed the app.
 - An outside review of the pairing and the encryption.
 
-## Try it
+## Work on it
 
 ```sh
 swift test                      # the package
 cd relay && go test -race ./... # the relay
+cd farol && go test -race ./... # the farol command
 ```
-
-To run a relay of your own, see [relay/README.md](relay/README.md).
 
 ## License
 
