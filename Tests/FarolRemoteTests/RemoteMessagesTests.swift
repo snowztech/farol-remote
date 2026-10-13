@@ -11,7 +11,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     for action: RemoteCommand.Action in [
         .hello(version: RemoteProtocol.version), .watch(session: session), .watch(session: nil),
         .send(session: session, text: "yes, and run the tests\n"), .key(session: session, key: .interrupt),
-        .notify(token: Data([0xAB, 0x01]), sandbox: true),
+        .notify(token: Data([0xAB, 0x01]), sandbox: true), .type(session: session, text: "/"), .key(session: session, key: .backspace),
     ] {
         let command = RemoteCommand(action)
         #expect(try roundTrip(command) == command)

@@ -10,7 +10,7 @@ public enum RemoteProtocol {
 
 /// A key that isn't text, for a prompt that waits on Return or an arrow.
 public enum RemoteKey: String, Codable, CaseIterable, Sendable {
-    case enter, escape, tab, up, down, left, right
+    case enter, escape, tab, up, down, left, right, backspace
     /// Control-C.
     case interrupt
 }
@@ -52,6 +52,8 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         /// Goes in whole, as a paste, and waits for a Return.
         case send(session: UUID, text: String)
         case key(session: UUID, key: RemoteKey)
+        /// Typed as keys, one after the other, so a program that reacts to each one does: a menu to a digit, an agent to a slash.
+        case type(session: UUID, text: String)
         /// Where Apple can reach this phone with a notification. `sandbox` is true for a build run from Xcode.
         case notify(token: Data, sandbox: Bool)
     }
