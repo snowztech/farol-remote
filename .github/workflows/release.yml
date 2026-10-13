@@ -15,9 +15,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
-          go-version-file: cmd/farol-remote/go.mod
+          go-version-file: cli/go.mod
       - name: Build
-        working-directory: cmd/farol-remote
+        working-directory: cli
         run: |
           for target in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
             GOOS=${target%/*} GOARCH=${target#*/} CGO_ENABLED=0 \

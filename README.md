@@ -15,7 +15,7 @@ curl -fsSL https://farol.sh/remote.sh | sh
 farol-remote setup
 ```
 
-Every tmux session on that machine is then one the phone can open. The full steps are in [cmd/farol-remote/README.md](cmd/farol-remote/README.md).
+Every tmux session on that machine is then one the phone can open. The full steps are in [cli/README.md](cli/README.md).
 
 ## What is in this repo
 
@@ -25,7 +25,7 @@ Everything that touches security, in one small place to read.
 | --- | --- | --- |
 | `Sources/FarolRemote` | The Swift package the Mac and iPhone apps share: the messages, pairing and the encryption | |
 | `relay/` | The server in between, in Go. It passes bytes it cannot read and stores nothing | [relay/README.md](relay/README.md) |
-| `cmd/farol-remote/` | `farol-remote`, the program for a server, in Go. It plays the Mac's part there | [cmd/farol-remote/README.md](cmd/farol-remote/README.md) |
+| `cli/` | `farol-remote`, the program for a server, in Go, and its installer. It plays the Mac's part there | [cli/README.md](cli/README.md) |
 | `Sources/RemoteProbe` | A phone in a terminal, for testing without the iPhone app | |
 
 ## How it works
@@ -53,7 +53,7 @@ One limit to know: if a Mac's own key were stolen later, traffic recorded from a
 ```sh
 swift test                      # the package
 cd relay && go test -race ./... # the relay
-cd cmd/farol-remote && go test -race ./... # the program for a server
+cd cli && go test -race ./... # the program for a server
 ```
 
 ## License

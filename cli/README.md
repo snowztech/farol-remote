@@ -58,7 +58,7 @@ Scan the code it shows, then leave with `Ctrl-b d`.
 
 ## Good to know
 
-- **A relay of your own.** Run `farol-remote -relay wss://your.host setup` or set `FAROL_RELAY`. A phone stays with the relay it was paired through. See [relay/README.md](../../relay/README.md).
+- **A relay of your own.** Run `farol-remote -relay wss://your.host setup` or set `FAROL_RELAY`. A phone stays with the relay it was paired through. See [relay/README.md](../relay/README.md).
 - **What it keeps.** This machine's key and the phones it paired, in `farol-remote` under your config folder, readable by you alone. `FAROL_REMOTE_DIR` puts them elsewhere.
 - **Updating.** Run the install line again, then `farol-remote setup` to restart it on the new version.
 - **What setup changes.** It adds hooks to `~/.claude/settings.json` and `~/.codex/hooks.json`, keeping a copy of each as `.farol-backup`, and adds a systemd service named `farol-remote`.
@@ -81,10 +81,11 @@ Scan the code it shows, then leave with `Ctrl-b d`.
 | `secure.go` | Pairing and the encryption, the same as the Swift package |
 | `wire.go` | The messages, written as the Swift package writes them |
 | `store.go` | The key, the paired phones and the code on screen |
+| `install.sh` | What `farol.sh/remote.sh` runs: it downloads a release and checks it |
 
 `testdata/swift.json` was written by the Swift package, from two keys made for the tests. The tests open it to prove a real phone and this program understand each other.
 
 ```sh
 go test -race ./...
-go install github.com/snowztech/farol-remote/cmd/farol-remote@latest   # build it yourself
+go build -o farol-remote .   # build it yourself
 ```
