@@ -8,8 +8,6 @@ Remote comes first, with Farol on the Mac as the host. The rest waits until peop
 
 A service that runs agents for you is not planned. Claude Code and Codex already run in their own clouds.
 
-Each step waits until people use the one before it.
-
 ## Not done yet
 
 What has to be true before Host leaves experimental:
