@@ -26,17 +26,17 @@ jobs:
       - run: go vet ./...
       - run: go test -race ./...
 
-  farol-remote:
+  farol-host:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: cli
+        working-directory: host
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
-          go-version-file: cli/go.mod
-          cache-dependency-path: cli/go.sum
+          go-version-file: host/go.mod
+          cache-dependency-path: host/go.sum
       # One test types into a real session.
       - run: sudo apt-get update && sudo apt-get install -y tmux
       - run: go vet ./...

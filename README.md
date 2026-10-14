@@ -8,16 +8,16 @@ In Farol on your Mac, open Settings → Remote, turn it on and show the code. Op
 
 ## Experimental: an always-on host
 
-The `farol-remote` CLI is an early preview for running sessions on your own server. It exposes tmux sessions from that server instead of sessions from Farol on the Mac, and the iPhone app still describes the paired host as a Mac.
+The `farol-host` CLI is an early preview for running sessions on your own server. It exposes tmux sessions from that server instead of sessions from Farol on the Mac, and the iPhone app still describes the paired host as a Mac.
 
 With tmux installed on the server:
 
 ```sh
-curl -fsSL https://farol.sh/remote.sh | sh
-farol-remote setup
+curl -fsSL https://farol.sh/host.sh | sh
+farol-host setup
 ```
 
-Every tmux session on that machine is then one the phone can open. The Mac and server cannot be paired at the same time yet. The full steps are in [cli/README.md](cli/README.md).
+Every tmux session on that machine is then one the phone can open. The Mac and server cannot be paired at the same time yet. The full steps are in [host/README.md](host/README.md).
 
 ## What is in this repo
 
@@ -27,14 +27,14 @@ Everything that touches security, in one small place to read.
 | --- | --- | --- |
 | `Sources/FarolRemote` | The Swift package the Mac and iPhone apps share: the messages, pairing and the encryption | |
 | `relay/` | The server in between, in Go. It passes bytes it cannot read and stores nothing | [relay/README.md](relay/README.md) |
-| `cli/` | The experimental `farol-remote` CLI and its installer. It lets a server play the Mac's part with tmux sessions | [cli/README.md](cli/README.md) |
+| `host/` | The experimental `farol-host` CLI and its installer. It lets a server play the Mac's part with tmux sessions | [host/README.md](host/README.md) |
 | `Sources/RemoteProbe` | A phone in a terminal, for testing without the iPhone app | |
 
 ## How it works
 
 ![The Mac, the relay and the phone](docs/architecture.png)
 
-A server running the `farol-remote` CLI connects the same way a Mac does. The relay and the phone do not tell them apart.
+A server running the `farol-host` CLI connects the same way a Mac does. The relay and the phone do not tell them apart.
 
 ## How it is kept private
 
@@ -44,18 +44,16 @@ A server running the `farol-remote` CLI connects the same way a Mac does. The re
 
 One limit to know: if a Mac's own key were stolen later, traffic recorded from a phone to that Mac could be read. The design has not had an outside review yet.
 
-## Not done yet
+## Roadmap
 
-- A Mac proves itself to the relay. Today someone who learned a room's name could connect as that Mac and knock the real one off. They could read and send nothing, since the encryption is tied to keys they do not have.
-- The relay tells a Mac when Apple no longer knows a phone, so the Mac stops asking to notify one that removed the app.
-- An outside review of the pairing and the encryption.
+Remote first, with the Mac as the host. See [ROADMAP.md](ROADMAP.md).
 
 ## Work on it
 
 ```sh
 swift test                      # the package
 cd relay && go test -race ./... # the relay
-cd cli && go test -race ./... # the farol-remote CLI
+cd host && go test -race ./... # the farol-host CLI
 ```
 
 ## License

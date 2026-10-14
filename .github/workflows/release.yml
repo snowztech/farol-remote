@@ -1,6 +1,6 @@
 name: Release
 
-# A tag like v0.2.0 builds farol-remote for the machines it runs on, and attaches the builds to the release install.sh downloads from.
+# A tag like v0.2.0 builds farol-host for the machines it runs on, and attaches the builds to the release install.sh downloads from.
 on:
   push:
     tags: ["v*"]
@@ -9,23 +9,23 @@ permissions:
   contents: write
 
 jobs:
-  farol-remote:
+  farol-host:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
-          go-version-file: cli/go.mod
-          cache-dependency-path: cli/go.sum
+          go-version-file: host/go.mod
+          cache-dependency-path: host/go.sum
       - name: Build
-        working-directory: cli
+        working-directory: host
         run: |
           for target in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
             GOOS=${target%/*} GOARCH=${target#*/} CGO_ENABLED=0 \
-              go build -trimpath -ldflags="-s -w -X main.version=$GITHUB_REF_NAME" -o "$GITHUB_WORKSPACE/dist/farol-remote-${target%/*}-${target#*/}" .
+              go build -trimpath -ldflags="-s -w -X main.version=$GITHUB_REF_NAME" -o "$GITHUB_WORKSPACE/dist/farol-host-${target%/*}-${target#*/}" .
           done
           # What install.sh checks a download against.
-          cd "$GITHUB_WORKSPACE/dist" && sha256sum farol-remote-* > checksums.txt
+          cd "$GITHUB_WORKSPACE/dist" && sha256sum farol-host-* > checksums.txt
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ github.token }}

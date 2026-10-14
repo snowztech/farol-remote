@@ -53,7 +53,7 @@ type bench struct {
 
 func newBench(t *testing.T) *bench {
 	t.Helper()
-	t.Setenv("FAROL_REMOTE_DIR", t.TempDir())
+	t.Setenv("FAROL_HOST_DIR", t.TempDir())
 	store, err := openStore()
 	if err != nil {
 		t.Fatal(err)
@@ -249,7 +249,7 @@ func TestWhatTheHostCannotDoIsRefusedAndNotLeftUnanswered(t *testing.T) {
 	b := newBench(t)
 	b.ready()
 	for id, c := range map[string]struct{ action, reason string }{
-		"newer":  {`{"rename":{}}`, "This machine does not know how to do that. Update farol-remote on it."},
+		"newer":  {`{"rename":{}}`, "This machine does not know how to do that. Update farol-host on it."},
 		"task":   {`{"options":{}}`, "This machine cannot start tasks from the phone yet."},
 		"closed": {send("00000000-0000-0000-0000-000000000000", "x"), "That session is closed."},
 	} {
