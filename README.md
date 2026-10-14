@@ -4,18 +4,20 @@ Answer your coding agents from your phone. [Farol](https://github.com/snowztech/
 
 ## Use it
 
-Pick where your agents run. The phone side is the same for both: open Farol on your iPhone and scan the code.
+In Farol on your Mac, open Settings → Remote, turn it on and show the code. Open Farol on your iPhone and scan it. The sessions already open on the Mac appear on the phone, where you can read and answer them while the Mac stays on.
 
-**On your Mac.** In Farol, open Settings → Remote, turn it on and show the code. The Mac has to stay on.
+## Experimental: an always-on host
 
-**On a server that stays on.** For agents that keep working with the Mac closed or off. With tmux installed:
+The `farol-remote` CLI is an early preview for running sessions on your own server. It exposes tmux sessions from that server instead of sessions from Farol on the Mac, and the iPhone app still describes the paired host as a Mac.
+
+With tmux installed on the server:
 
 ```sh
 curl -fsSL https://farol.sh/remote.sh | sh
 farol-remote setup
 ```
 
-Every tmux session on that machine is then one the phone can open. The full steps are in [cli/README.md](cli/README.md).
+Every tmux session on that machine is then one the phone can open. The Mac and server cannot be paired at the same time yet. The full steps are in [cli/README.md](cli/README.md).
 
 ## What is in this repo
 
@@ -25,7 +27,7 @@ Everything that touches security, in one small place to read.
 | --- | --- | --- |
 | `Sources/FarolRemote` | The Swift package the Mac and iPhone apps share: the messages, pairing and the encryption | |
 | `relay/` | The server in between, in Go. It passes bytes it cannot read and stores nothing | [relay/README.md](relay/README.md) |
-| `cli/` | The `farol-remote` CLI, in Go, and its installer. It runs Farol Remote on a server, where it plays the Mac's part | [cli/README.md](cli/README.md) |
+| `cli/` | The experimental `farol-remote` CLI and its installer. It lets a server play the Mac's part with tmux sessions | [cli/README.md](cli/README.md) |
 | `Sources/RemoteProbe` | A phone in a terminal, for testing without the iPhone app | |
 
 ## How it works
