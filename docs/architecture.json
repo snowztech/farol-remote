@@ -7,50 +7,306 @@
     "quality_profile": "showcase"
   },
   "components": [
-    { "id": "sessions", "type": "frontend", "label": "Sessions", "sublabel": "terminal panes, agents", "pos": [60, 110], "size": [170, 64] },
-    { "id": "bridge", "type": "backend", "label": "RemoteBridge", "sublabel": "farol app, one per Mac", "tag": "off until Remote is on", "pos": [60, 260], "size": [170, 68] },
-    { "id": "maclink", "type": "security", "label": "MacLink", "sublabel": "Pairing + SecureChannel", "tag": "one per phone", "pos": [60, 420], "size": [170, 68] },
-    { "id": "macconn", "type": "messagebus", "label": "RelayConnection", "sublabel": "WebSocket, reconnects", "pos": [60, 580], "size": [170, 64] },
-
-    { "id": "cli", "type": "backend", "label": "farol-remote CLI", "sublabel": "host.go, secure.go", "tag": "same frames, in Go", "pos": [60, 760], "size": [170, 68] },
-    { "id": "tmux", "type": "frontend", "label": "tmux sessions", "sublabel": "agents on a server", "pos": [60, 920], "size": [170, 64] },
-
-    { "id": "rooms", "type": "backend", "label": "Rooms", "sublabel": "relay.go, peer.go", "tag": "1 Mac or server, 8 phones", "pos": [480, 580], "size": [170, 68] },
-    { "id": "pusher", "type": "backend", "label": "Pusher", "sublabel": "push.go", "tag": "20 a minute per Mac", "pos": [480, 740], "size": [170, 68] },
-
-    { "id": "client", "type": "frontend", "label": "RemoteClient", "sublabel": "farol-ios app", "pos": [900, 260], "size": [170, 64] },
-    { "id": "phonelink", "type": "security", "label": "PhoneLink", "sublabel": "Pairing + SecureChannel", "pos": [900, 420], "size": [170, 64] },
-    { "id": "phoneconn", "type": "messagebus", "label": "RelayConnection", "sublabel": "WebSocket, reconnects", "pos": [900, 580], "size": [170, 64] },
-
-    { "id": "apns", "type": "external", "label": "Apple APNs", "sublabel": "topic sh.farol.ios", "pos": [900, 740], "size": [170, 64] }
+    {
+      "id": "sessions",
+      "type": "frontend",
+      "label": "Sessions",
+      "sublabel": "terminal panes, agents",
+      "pos": [
+        60,
+        90
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "bridge",
+      "type": "backend",
+      "label": "RemoteBridge",
+      "sublabel": "farol app, one per Mac",
+      "tag": "off until Remote is on",
+      "pos": [
+        60,
+        210
+      ],
+      "size": [
+        170,
+        68
+      ]
+    },
+    {
+      "id": "maclink",
+      "type": "security",
+      "label": "MacLink",
+      "sublabel": "Pairing + SecureChannel",
+      "tag": "one per phone",
+      "pos": [
+        60,
+        335
+      ],
+      "size": [
+        170,
+        68
+      ]
+    },
+    {
+      "id": "macconn",
+      "type": "messagebus",
+      "label": "RelayConnection",
+      "sublabel": "WebSocket, reconnects",
+      "pos": [
+        60,
+        460
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "rooms",
+      "type": "backend",
+      "label": "Rooms",
+      "sublabel": "relay.go, peer.go",
+      "tag": "1 Mac, 8 phones",
+      "pos": [
+        480,
+        460
+      ],
+      "size": [
+        170,
+        68
+      ]
+    },
+    {
+      "id": "pusher",
+      "type": "backend",
+      "label": "Pusher",
+      "sublabel": "push.go",
+      "tag": "20 a minute per Mac",
+      "pos": [
+        480,
+        590
+      ],
+      "size": [
+        170,
+        68
+      ]
+    },
+    {
+      "id": "client",
+      "type": "frontend",
+      "label": "RemoteClient",
+      "sublabel": "farol-ios app",
+      "pos": [
+        900,
+        210
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "phonelink",
+      "type": "security",
+      "label": "PhoneLink",
+      "sublabel": "Pairing + SecureChannel",
+      "pos": [
+        900,
+        335
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "phoneconn",
+      "type": "messagebus",
+      "label": "RelayConnection",
+      "sublabel": "WebSocket, reconnects",
+      "pos": [
+        900,
+        460
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "apns",
+      "type": "external",
+      "label": "Apple APNs",
+      "sublabel": "topic sh.farol.ios",
+      "pos": [
+        900,
+        590
+      ],
+      "size": [
+        170,
+        64
+      ]
+    }
   ],
   "boundaries": [
-    { "kind": "region", "label": "Farol on Mac", "wraps": ["sessions", "bridge", "maclink", "macconn"] },
-    { "kind": "security-group", "label": "FarolRemote package", "wraps": ["maclink", "macconn"] },
-    { "kind": "region", "label": "A server that stays on", "wraps": ["cli", "tmux"] },
-    { "kind": "region", "label": "Relay (Go), relay.farol.sh", "wraps": ["rooms", "pusher"] },
-    { "kind": "region", "label": "Farol on iPhone", "wraps": ["client", "phonelink", "phoneconn"] },
-    { "kind": "security-group", "label": "FarolRemote package", "wraps": ["phonelink", "phoneconn"] }
+    {
+      "kind": "region",
+      "label": "Farol on Mac",
+      "wraps": [
+        "sessions",
+        "bridge",
+        "maclink",
+        "macconn"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "FarolRemote package",
+      "wraps": [
+        "maclink",
+        "macconn"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Relay (Go), relay.farol.sh",
+      "wraps": [
+        "rooms",
+        "pusher"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Farol on iPhone",
+      "wraps": [
+        "client",
+        "phonelink",
+        "phoneconn"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "FarolRemote package",
+      "wraps": [
+        "phonelink",
+        "phoneconn"
+      ]
+    }
   ],
   "connections": [
-    { "id": "sessions-bridge", "from": "sessions", "to": "bridge", "label": "screen out, keys in", "labelDy": 52 },
-    { "id": "bridge-maclink", "from": "bridge", "to": "maclink", "label": "RemoteEvent", "labelDy": 52 },
-    { "id": "maclink-macconn", "from": "maclink", "to": "macconn", "label": "WireFrame", "labelDy": 52 },
-    { "id": "macconn-rooms", "from": "macconn", "to": "rooms", "label": "WSS /{room}/mac", "variant": "emphasis" },
-    { "id": "tmux-cli", "from": "tmux", "to": "cli", "label": "screen out, keys in", "labelDy": -26 },
-    { "id": "cli-rooms", "from": "cli", "to": "rooms", "label": "WSS /{room}/mac", "variant": "emphasis" },
-    { "id": "phoneconn-rooms", "from": "phoneconn", "to": "rooms", "label": "WSS /{room}/phone", "variant": "emphasis" },
-    { "id": "client-phonelink", "from": "client", "to": "phonelink", "label": "RemoteCommand", "labelDy": 52 },
-    { "id": "phonelink-phoneconn", "from": "phonelink", "to": "phoneconn", "label": "WireFrame", "labelDy": 52 },
-    { "id": "qr-pairing", "from": "bridge", "to": "client", "label": "QR code: PairingOffer, once, 2 min", "variant": "security" },
-    { "id": "rooms-pusher", "from": "rooms", "to": "pusher", "label": "push frame", "labelDy": 52 },
-    { "id": "pusher-apns", "from": "pusher", "to": "apns", "label": "fixed words only" },
-    { "id": "apns-client", "from": "apns", "to": "client", "label": "notification", "variant": "dashed", "fromSide": "right", "toSide": "right" }
+    {
+      "id": "sessions-bridge",
+      "from": "sessions",
+      "to": "bridge",
+      "label": "screen out, keys in",
+      "labelDy": 40
+    },
+    {
+      "id": "bridge-maclink",
+      "from": "bridge",
+      "to": "maclink",
+      "label": "RemoteEvent",
+      "labelDy": 40
+    },
+    {
+      "id": "maclink-macconn",
+      "from": "maclink",
+      "to": "macconn",
+      "label": "WireFrame",
+      "labelDy": 40
+    },
+    {
+      "id": "macconn-rooms",
+      "from": "macconn",
+      "to": "rooms",
+      "label": "WSS /{room}/mac",
+      "variant": "emphasis"
+    },
+    {
+      "id": "phoneconn-rooms",
+      "from": "phoneconn",
+      "to": "rooms",
+      "label": "WSS /{room}/phone",
+      "variant": "emphasis"
+    },
+    {
+      "id": "client-phonelink",
+      "from": "client",
+      "to": "phonelink",
+      "label": "RemoteCommand",
+      "labelDy": 40
+    },
+    {
+      "id": "phonelink-phoneconn",
+      "from": "phonelink",
+      "to": "phoneconn",
+      "label": "WireFrame",
+      "labelDy": 40
+    },
+    {
+      "id": "qr-pairing",
+      "from": "bridge",
+      "to": "client",
+      "label": "QR code: PairingOffer, once, 2 min",
+      "variant": "security"
+    },
+    {
+      "id": "rooms-pusher",
+      "from": "rooms",
+      "to": "pusher",
+      "label": "push frame",
+      "labelDy": 40
+    },
+    {
+      "id": "pusher-apns",
+      "from": "pusher",
+      "to": "apns",
+      "label": "fixed words only"
+    },
+    {
+      "id": "apns-client",
+      "from": "apns",
+      "to": "client",
+      "label": "notification",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "right"
+    }
   ],
   "cards": [
-    { "dot": "cyan", "title": "Swift package, both apps", "items": ["RemoteMessages: RemoteCommand from the phone, RemoteEvent from the Mac", "Pairing: one HPKE message proving the phone's key and the QR secret", "SecureChannel: an HPKE stream each way, tied to both nonces", "MacLink and PhoneLink: no sockets, frames in and what to do out"] },
-    { "dot": "emerald", "title": "Relay", "items": ["Room name is the SHA-256 of the Mac's public key", "One byte says what a frame is: data, joined, left, online, offline, push", "Mac frames carry a phone number, so the relay knows where they go", "Stores nothing and logs counts only"] },
-    { "dot": "violet", "title": "Bridge", "items": ["Lives in the farol app, in RemoteBridge.swift", "Sends the session list and the open screen, in full, when they change", "Types a command once, even if it arrives twice", "Asks for a notification when an agent waits or finishes"] },
-    { "dot": "amber", "title": "CLI on a server", "items": ["Takes the Mac's place: same room, same frames, the phone cannot tell", "Every tmux session is one the phone can open", "Pairing and the channel are written again in Go, and tested against what the Swift package seals", "Shows the QR code in the terminal"] }
+    {
+      "dot": "cyan",
+      "title": "Swift package, both apps",
+      "items": [
+        "RemoteMessages: RemoteCommand from the phone, RemoteEvent from the Mac",
+        "Pairing: one HPKE message proving the phone's key and the QR secret",
+        "SecureChannel: an HPKE stream each way, tied to both nonces",
+        "MacLink and PhoneLink: no sockets, frames in and what to do out"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Relay",
+      "items": [
+        "Room name is the SHA-256 of the Mac's public key",
+        "One byte says what a frame is: data, joined, left, online, offline, push",
+        "Mac frames carry a phone number, so the relay knows where they go",
+        "Stores nothing and logs counts only"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Bridge",
+      "items": [
+        "Lives in the farol app, in RemoteBridge.swift",
+        "Sends the session list and the open screen, in full, when they change",
+        "Types a command once, even if it arrives twice",
+        "Asks for a notification when an agent waits or finishes"
+      ]
+    }
   ]
 }
