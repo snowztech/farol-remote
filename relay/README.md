@@ -15,6 +15,17 @@ Or without Docker: `go run .`. It listens on `PORT`, 8080 by default.
 
 Put it behind something that speaks TLS and sets `X-Real-IP` or adds to `X-Forwarded-For`, which is how the relay counts connections from one address. Then enter `wss://your.host` in Settings → Remote and turn Remote off and on.
 
+## Deploy relay.farol.sh
+
+For whoever runs Farol's own relay, from this folder:
+
+```sh
+make deploy   # tests, then ships main to Railway
+make logs     # wait for: farol relay on :8080, notifications on
+```
+
+It refuses unless you are on `main`, with nothing uncommitted, and the same as `origin/main`, so what runs is always what is on GitHub. It needs the Railway CLI, logged in and linked to the farol-relay project.
+
 ## Notifications
 
 The relay asks Apple to notify a phone when the Mac says an agent is waiting or has finished. That needs a key from the developer of the iOS app, so only the relay that developer runs can do it. Without the key the relay works as before and sends none.
