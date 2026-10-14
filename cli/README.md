@@ -1,5 +1,7 @@
 # The farol-remote CLI
 
+> **Experimental.** Farol Remote currently focuses on continuing sessions from Farol on the Mac. This CLI previews an always-on host for people who deliberately run their agents on a server.
+
 Runs Farol Remote on a server. `farol-remote` lets a paired phone see and type into the tmux sessions of a server, the way Farol on a Mac does for its own sessions. Your agents keep working, and you keep answering them, with the Mac closed or off.
 
 The phone reaches the server through the relay, as it reaches a Mac. Everything is encrypted between the two, so the relay cannot read it.
