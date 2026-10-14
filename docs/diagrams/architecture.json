@@ -70,7 +70,7 @@
       "type": "backend",
       "label": "Rooms",
       "sublabel": "relay.go, peer.go",
-      "tag": "1 Mac, 8 phones",
+      "tag": "1 host, 8 phones",
       "pos": [
         480,
         460
@@ -150,6 +150,35 @@
         170,
         64
       ]
+    },
+    {
+      "id": "host",
+      "type": "backend",
+      "label": "farol-host",
+      "sublabel": "host/, same frames in Go",
+      "tag": "experimental",
+      "pos": [
+        60,
+        650
+      ],
+      "size": [
+        170,
+        68
+      ]
+    },
+    {
+      "id": "tmux",
+      "type": "frontend",
+      "label": "tmux sessions",
+      "sublabel": "agents on a server",
+      "pos": [
+        60,
+        790
+      ],
+      "size": [
+        170,
+        64
+      ]
     }
   ],
   "boundaries": [
@@ -194,6 +223,14 @@
       "wraps": [
         "phonelink",
         "phoneconn"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Experimental: a server that stays on",
+      "wraps": [
+        "host",
+        "tmux"
       ]
     }
   ],
@@ -275,6 +312,21 @@
       "variant": "dashed",
       "fromSide": "right",
       "toSide": "right"
+    },
+    {
+      "id": "tmux-host",
+      "from": "tmux",
+      "to": "host",
+      "label": "screen out, keys in",
+      "variant": "dashed",
+      "labelDy": -24
+    },
+    {
+      "id": "host-rooms",
+      "from": "host",
+      "to": "rooms",
+      "label": "WSS /{room}/mac",
+      "variant": "dashed"
     }
   ],
   "cards": [
