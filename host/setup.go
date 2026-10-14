@@ -12,9 +12,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strings"
 )
 
-// `farol-remote setup` makes a server ready in one go: the agents report what they do, and the host runs by itself from boot.
+// `farol-host setup` makes a server ready in one go: the agents report what they do, and the host runs by itself from boot.
 
 // An agent is a coding agent, the file it reads its hooks from, and which of its events mean what.
 // Claude Code and Codex use the same shape for hooks, and these are the events Farol on a Mac uses for each.
@@ -58,10 +59,10 @@ func agents(home string) []agent {
 	}
 }
 
-// A hook of ours, wherever farol-remote was installed when it was added. The ones Farol on a Mac adds call $FAROL_CLI, and are left alone.
-var ourHook = regexp.MustCompile(`farol-remote"? status [a-z-]+$`)
+// A hook of ours, wherever farol-host was installed when it was added. The ones Farol on a Mac adds call $FAROL_CLI, and are left alone.
+var ourHook = regexp.MustCompile(`farol-(host|remote)"? status [a-z-]+$`)
 
-// connectHooks puts the hooks that call `farol-remote status` into an agent's settings and leaves the rest alone.
+// connectHooks puts the hooks that call `farol-host status` into an agent's settings and leaves the rest alone.
 // Ours from an earlier run are replaced, so running it again changes nothing.
 func connectHooks(settings map[string]any, events []hookEvent, program string) map[string]any {
 	hooks, _ := settings["hooks"].(map[string]any)
@@ -149,7 +150,7 @@ func connectFile(path string, events []hookEvent, program string) error {
 	return os.Rename(beside, path)
 }
 
-const serviceName = "farol-remote"
+const serviceName = "farol-host"
 
 // unit is what tells systemd to keep the host running. For root it is a service of the machine, and for anyone else one of their own.
 // The PATH is the one setup was run with, so the service finds the same tmux and git you do.
@@ -159,7 +160,7 @@ func unit(program, relay, path, home, dir string, system bool) string {
 		wanted = "multi-user.target"
 	}
 	text := fmt.Sprintf(`[Unit]
-Description=Farol Remote, which lets a paired phone see and type into tmux sessions
+Description=Farol Host, which lets a paired phone see and type into tmux sessions
 After=network-online.target
 Wants=network-online.target
 
@@ -170,7 +171,7 @@ Environment=%q
 Environment=%q
 `, program, "PATH="+path, "HOME="+home, "FAROL_RELAY="+relay)
 	if dir != "" {
-		text += fmt.Sprintf("Environment=%q\n", "FAROL_REMOTE_DIR="+dir)
+		text += fmt.Sprintf("Environment=%q\n", "FAROL_HOST_DIR="+dir)
 	}
 	return text + fmt.Sprintf(`Restart=always
 RestartSec=5
@@ -197,11 +198,17 @@ func installService(program, relay string) (bool, error) {
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 		return true, err
 	}
-	text := unit(program, relay, os.Getenv("PATH"), home, os.Getenv("FAROL_REMOTE_DIR"), system)
+	// The service had the program's old name. It is stopped and removed, so the two never run at once.
+	old := strings.Replace(file, serviceName, "farol-remote", 1)
+	if _, err := os.Stat(old); err == nil {
+		_ = exec.Command("systemctl", append(scope, "disable", "--now", "farol-remote")...).Run()
+		_ = os.Remove(old)
+	}
+	text := unit(program, relay, os.Getenv("PATH"), home, os.Getenv("FAROL_HOST_DIR"), system)
 	if err := os.WriteFile(file, []byte(text), 0o644); err != nil {
 		return true, err
 	}
-	// Restarted and not only started, so a farol-remote that was just updated is the one that runs.
+	// Restarted and not only started, so a farol-host that was just updated is the one that runs.
 	for _, step := range [][]string{{"daemon-reload"}, {"enable", serviceName}, {"restart", serviceName}} {
 		if out, err := exec.Command("systemctl", append(scope, step...)...).CombinedOutput(); err != nil {
 			return true, fmt.Errorf("systemctl %s: %s", step[0], bytes.TrimSpace(out))
@@ -217,7 +224,7 @@ func installService(program, relay string) (bool, error) {
 	return true, nil
 }
 
-// setup is `farol-remote setup`. It is true when the host is now running as a service.
+// setup is `farol-host setup`. It is true when the host is now running as a service.
 func setup(relay string) bool {
 	program, err := os.Executable()
 	if err != nil {
@@ -244,12 +251,12 @@ func setup(relay string) bool {
 	running, err := installService(program, relay)
 	switch {
 	case err != nil:
-		fmt.Printf("farol-remote could not be set to run by itself: %v\n", err)
+		fmt.Printf("farol-host could not be set to run by itself: %v\n", err)
 		return false
 	case !running:
-		fmt.Println("This machine has no systemd, so keep `farol-remote` running yourself, in a tmux session for example.")
+		fmt.Println("This machine has no systemd, so keep `farol-host` running yourself, in a tmux session for example.")
 		return false
 	}
-	fmt.Println("farol-remote is running, and starts again by itself when the machine does.")
+	fmt.Println("farol-host is running, and starts again by itself when the machine does.")
 	return true
 }

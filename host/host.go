@@ -85,7 +85,7 @@ func (h *host) handle(id uint32, p *phone, frame wireFrame) {
 			err = h.store.add(paired)
 		}
 		if err != nil {
-			h.refuse(id, "This code is no longer valid. Run farol-remote pair for a new one.")
+			h.refuse(id, "This code is no longer valid. Run farol-host pair for a new one.")
 			return
 		}
 		h.store.spendOffer()
@@ -173,7 +173,7 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 		h.tell(id, p, refusedEvent(c.ID, "This machine cannot start tasks from the phone yet."))
 	case c.ID != "":
 		// One that opens and does not read is from a newer phone. It is told so, so it does not wait for an answer.
-		h.tell(id, p, refusedEvent(c.ID, "This machine does not know how to do that. Update farol-remote on it."))
+		h.tell(id, p, refusedEvent(c.ID, "This machine does not know how to do that. Update farol-host on it."))
 	}
 }
 
@@ -199,7 +199,7 @@ func (h *host) tick() {
 	if len(h.phones) == 0 {
 		return
 	}
-	// A phone removed with `farol-remote forget` is cut off at once, and not at its next connection.
+	// A phone removed with `farol-host forget` is cut off at once, and not at its next connection.
 	devices := h.store.devices()
 	for id, p := range h.phones {
 		if p.device != nil && find(devices, p.device.Key) == nil {
