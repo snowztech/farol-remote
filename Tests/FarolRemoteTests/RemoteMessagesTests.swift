@@ -13,6 +13,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
         .send(session: session, text: "yes, and run the tests\n"), .key(session: session, key: .interrupt),
         .notify(token: Data([0xAB, 0x01]), sandbox: true), .notify(token: Data([0xAB]), sandbox: false, notices: [.waiting]),
         .notify(token: Data([0xAB]), sandbox: false, notices: []), .notify(token: Data([1]), sandbox: true, notices: [.done], key: Data([7])),
+        .notify(token: Data([1]), sandbox: false, starts: Data([0xCD])),
         .history(session: session), .options, .task(project: "/Users/me/shelf", agent: "claude", text: "fix the flaky test"), .type(session: session, text: "/"), .key(session: session, key: .backspace),
         .activity(token: Data([0xAB, 0x02]), sandbox: true),
     ] {
@@ -97,7 +98,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
 }
 
 @Test func aLiveActivityPushCarriesWhatTheRelayExpects() throws {
-    let frame = RelayFrame.activity(token: Data([0xAB, 0x01]), sandbox: false, ending: true, urgent: true, state: RemoteActivityState(waiting: 2, working: 0, sealed: "c2VhbGVk"))
+    let frame = RelayFrame.activity(token: Data([0xAB, 0x01]), sandbox: false, event: .end, urgent: true, state: RemoteActivityState(waiting: 2, working: 0, sealed: "c2VhbGVk"))
     #expect(frame.first == 5)
     let sent = try JSONSerialization.jsonObject(with: frame.dropFirst()) as? [String: Any]
     #expect(sent?["token"] as? String == "ab01")

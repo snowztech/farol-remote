@@ -101,7 +101,9 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         /// Where Apple can reach this phone with a notification. `sandbox` is true for a build run from Xcode.
         /// `notices` is what the phone wants to hear about. An older phone leaves it out, and hears about everything.
         /// `key` lets the Mac seal which session a notification is about, so only this phone can read it.
-        case notify(token: Data, sandbox: Bool, notices: [RemoteNotice]? = nil, key: Data? = nil)
+        /// `starts` is where Apple can start a Live Activity on this phone while the app is closed, from iOS 17.2.
+        /// It rides here rather than in a command of its own, so a Mac that does not know it just ignores it.
+        case notify(token: Data, sandbox: Bool, notices: [RemoteNotice]? = nil, key: Data? = nil, starts: Data? = nil)
         /// Where Apple can reach the Live Activity this phone started, to keep it current while the app is closed.
         /// A Mac that does not know it refuses it, and the phone goes on without updates.
         case activity(token: Data, sandbox: Bool)
