@@ -77,7 +77,7 @@ type pushRequest struct {
 	Sandbox string `json:"sandbox"`
 	// Which session it is about, sealed by the Mac for the phone. The relay cannot open it, and only passes it on.
 	Sealed string `json:"sealed"`
-	// Set for a Live Activity instead of a notification: "update" or "end". The relay writes the rest from the two counts.
+	// Set for a Live Activity instead of a notification: "start", "update" or "end". The relay writes the rest from the two counts.
 	Activity string `json:"activity"`
 	Waiting  int    `json:"waiting"`
 	Working  int    `json:"working"`
@@ -85,7 +85,7 @@ type pushRequest struct {
 	Urgent bool `json:"urgent"`
 }
 
-var activityEvents = map[string]bool{"update": true, "end": true}
+var activityEvents = map[string]bool{"start": true, "update": true, "end": true}
 
 var sealedText = regexp.MustCompile(`^[A-Za-z0-9+/=]*$`)
 
@@ -118,9 +118,19 @@ func (p *pusher) send(ctx context.Context, asked []byte) error {
 			// If updates stop, say the Mac slept, iOS shows it as out of date instead of a "working" that no longer is.
 			aps["stale-date"] = time.Now().Add(15 * time.Minute).Unix()
 		}
+		if request.Activity == "start" {
+			// Started with the app closed. iOS needs to know which kind to make, and an alert to light the screen with.
+			// No sound: a waiting agent already gets its own notification.
+			words := "An agent is working."
+			if request.Waiting > 0 {
+				words = notices["waiting"]
+			}
+			aps["attributes-type"], aps["attributes"] = "SessionsActivity", map[string]any{}
+			aps["alert"] = map[string]string{"title": "Farol", "body": words}
+		}
 		payload["aps"], kind, topic = aps, "liveactivity", p.topic+".push-type.liveactivity"
-		// Apple caps urgent Live Activity pushes per hour. The rest can wait for the phone's next wake.
-		if !request.Urgent {
+		// Apple caps urgent Live Activity pushes per hour. The rest can wait for the phone's next wake. A start is never held back.
+		if !request.Urgent && request.Activity != "start" {
 			priority = "5"
 		}
 	} else {

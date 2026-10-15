@@ -182,10 +182,34 @@ func TestUpdatesALiveActivityWithCountsAndSealedNames(t *testing.T) {
 	}
 }
 
+func TestStartsALiveActivityWithTheAppClosed(t *testing.T) {
+	p, calls := apple(t)
+	payload, _ := json.Marshal(pushRequest{Token: someToken, Activity: "start", Working: 1, Sealed: "c2VhbGVk"})
+	if err := p.send(context.Background(), payload); err != nil {
+		t.Fatal(err)
+	}
+	got := <-calls
+	if got.topic != "sh.farol.ios.push-type.liveactivity" || got.priority != "10" {
+		t.Fatalf("asked %+v", got)
+	}
+	var sent struct {
+		Aps struct {
+			Event string                `json:"event"`
+			Type  string                `json:"attributes-type"`
+			Alert map[string]string     `json:"alert"`
+			State struct{ Working int } `json:"content-state"`
+		} `json:"aps"`
+	}
+	json.Unmarshal([]byte(got.body), &sent)
+	if sent.Aps.Event != "start" || sent.Aps.Type != "SessionsActivity" || sent.Aps.Alert["body"] != "An agent is working." || sent.Aps.State.Working != 1 {
+		t.Fatalf("said %s", got.body)
+	}
+}
+
 func TestRefusesALiveActivityItDoesNotKnow(t *testing.T) {
 	p, _ := apple(t)
 	for _, asked := range []pushRequest{
-		{Token: someToken, Activity: "start"},
+		{Token: someToken, Activity: "pause"},
 		{Token: someToken, Activity: "update", Waiting: -1},
 		{Token: someToken, Activity: "update", Sealed: "not base64!"},
 	} {
