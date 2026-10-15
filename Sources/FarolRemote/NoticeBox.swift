@@ -21,15 +21,20 @@ public enum NoticeBox {
         SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
     }
 
-    public static func seal(_ content: RemoteNoticeContent, key: Data) -> Data? {
+    /// Anything only the phone should read: a notification's session, or a Live Activity's sessions.
+    public static func seal<Content: Encodable>(_ content: Content, key: Data) -> Data? {
         guard key.count == 32, let plain = try? JSONEncoder().encode(content) else { return nil }
         return try? ChaChaPoly.seal(plain, using: SymmetricKey(data: key)).combined
     }
 
-    public static func open(_ sealed: Data, key: Data) -> RemoteNoticeContent? {
+    public static func open<Content: Decodable>(_ sealed: Data, as type: Content.Type, key: Data) -> Content? {
         guard key.count == 32, let box = try? ChaChaPoly.SealedBox(combined: sealed),
               let plain = try? ChaChaPoly.open(box, using: SymmetricKey(data: key)) else { return nil }
-        return try? JSONDecoder().decode(RemoteNoticeContent.self, from: plain)
+        return try? JSONDecoder().decode(type, from: plain)
+    }
+
+    public static func open(_ sealed: Data, key: Data) -> RemoteNoticeContent? {
+        open(sealed, as: RemoteNoticeContent.self, key: key)
     }
 
     #if os(iOS)

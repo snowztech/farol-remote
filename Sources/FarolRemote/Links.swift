@@ -41,6 +41,20 @@ public enum RelayFrame: Equatable, Sendable {
         return Data([5]) + ((try? JSONEncoder().encode(request)) ?? Data())
     }
 
+    /// What a Mac sends to update or end the Live Activity on one of its phones. The relay writes the push from the counts and passes `sealed` on.
+    /// `urgent` is for an agent that just started waiting: Apple caps urgent pushes, so the rest go when the phone next wakes.
+    public static func activity(token: Data, sandbox: Bool, ending: Bool, urgent: Bool, state: RemoteActivityState) -> Data {
+        struct Request: Encodable {
+            var token, sandbox, activity: String
+            var waiting, working: Int
+            var urgent: Bool
+            var sealed: String?
+        }
+        let request = Request(token: token.map { String(format: "%02x", $0) }.joined(), sandbox: sandbox ? "1" : "", activity: ending ? "end" : "update",
+                              waiting: state.waiting, working: state.working, urgent: urgent, sealed: state.sealed)
+        return Data([5]) + ((try? JSONEncoder().encode(request)) ?? Data())
+    }
+
     /// `side` is who reads: what the Mac gets carries a phone's number, what a phone gets does not.
     public init?(_ message: Data, readBy side: SecureChannel.Side) {
         guard let kind = message.first else { return nil }

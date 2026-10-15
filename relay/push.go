@@ -77,7 +77,15 @@ type pushRequest struct {
 	Sandbox string `json:"sandbox"`
 	// Which session it is about, sealed by the Mac for the phone. The relay cannot open it, and only passes it on.
 	Sealed string `json:"sealed"`
+	// Set for a Live Activity instead of a notification: "update" or "end". The relay writes the rest from the two counts.
+	Activity string `json:"activity"`
+	Waiting  int    `json:"waiting"`
+	Working  int    `json:"working"`
+	// An agent just started waiting. Only then is it worth Apple's budget for urgent Live Activity pushes.
+	Urgent bool `json:"urgent"`
 }
+
+var activityEvents = map[string]bool{"update": true, "end": true}
 
 var sealedText = regexp.MustCompile(`^[A-Za-z0-9+/=]*$`)
 
@@ -89,16 +97,44 @@ func (p *pusher) send(ctx context.Context, asked []byte) error {
 	if err := json.Unmarshal(asked, &request); err != nil {
 		return err
 	}
-	words, known := notices[request.Notice]
-	if !known || !deviceToken.MatchString(request.Token) || len(request.Sealed) > 2000 || !sealedText.MatchString(request.Sealed) {
+	if !deviceToken.MatchString(request.Token) || len(request.Sealed) > 2000 || !sealedText.MatchString(request.Sealed) {
 		return errors.New("not a notification this relay sends")
 	}
-	aps := map[string]any{"alert": map[string]string{"title": "Farol", "body": words}, "sound": "default"}
-	payload := map[string]any{"aps": aps}
-	if request.Sealed != "" {
-		// Lets the app open what is sealed and show the session's name. If it cannot, the words above are shown.
-		aps["mutable-content"] = 1
-		payload["farol"] = request.Sealed
+	payload, kind, topic, priority := map[string]any{}, "alert", p.topic, "10"
+	if request.Activity != "" {
+		if !activityEvents[request.Activity] || request.Waiting < 0 || request.Working < 0 || request.Waiting > 999 || request.Working > 999 {
+			return errors.New("not a notification this relay sends")
+		}
+		// Only the two counts are in the clear. The names ride sealed, and the phone's widget opens them.
+		state := map[string]any{"waiting": request.Waiting, "working": request.Working}
+		if request.Sealed != "" {
+			state["sealed"] = request.Sealed
+		}
+		aps := map[string]any{"timestamp": time.Now().Unix(), "event": request.Activity, "content-state": state}
+		if request.Activity == "end" {
+			// Stays on the lock screen a few minutes with its last state, then goes.
+			aps["dismissal-date"] = time.Now().Add(5 * time.Minute).Unix()
+		} else {
+			// If updates stop, say the Mac slept, iOS shows it as out of date instead of a "working" that no longer is.
+			aps["stale-date"] = time.Now().Add(15 * time.Minute).Unix()
+		}
+		payload["aps"], kind, topic = aps, "liveactivity", p.topic+".push-type.liveactivity"
+		// Apple caps urgent Live Activity pushes per hour. The rest can wait for the phone's next wake.
+		if !request.Urgent {
+			priority = "5"
+		}
+	} else {
+		words, known := notices[request.Notice]
+		if !known {
+			return errors.New("not a notification this relay sends")
+		}
+		aps := map[string]any{"alert": map[string]string{"title": "Farol", "body": words}, "sound": "default"}
+		payload["aps"] = aps
+		if request.Sealed != "" {
+			// Lets the app open what is sealed and show the session's name. If it cannot, the words above are shown.
+			aps["mutable-content"] = 1
+			payload["farol"] = request.Sealed
+		}
 	}
 	body, _ := json.Marshal(payload)
 	host := p.production
@@ -114,8 +150,9 @@ func (p *pusher) send(ctx context.Context, asked []byte) error {
 		return err
 	}
 	call.Header.Set("authorization", "bearer "+bearer)
-	call.Header.Set("apns-topic", p.topic)
-	call.Header.Set("apns-push-type", "alert")
+	call.Header.Set("apns-topic", topic)
+	call.Header.Set("apns-push-type", kind)
+	call.Header.Set("apns-priority", priority)
 	answer, err := p.client.Do(call)
 	if err != nil {
 		// The error names the address it called, which ends in the phone's token. That has no place in a log.

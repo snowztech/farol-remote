@@ -17,7 +17,7 @@ import (
 const someToken = "ab01ff00ab01ff00ab01ff00ab01ff00ab01ff00ab01ff00ab01ff00ab01ff00"
 
 type asked struct {
-	path, bearer, topic, body string
+	path, bearer, topic, body, priority string
 }
 
 // apple stands in for Apple's servers, and records what it was asked.
@@ -26,7 +26,7 @@ func apple(t *testing.T) (*pusher, chan asked) {
 	calls := make(chan asked, 8)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
-		calls <- asked{r.URL.Path, r.Header.Get("authorization"), r.Header.Get("apns-topic"), string(body)}
+		calls <- asked{r.URL.Path, r.Header.Get("authorization"), r.Header.Get("apns-topic"), string(body), r.Header.Get("apns-priority")}
 	}))
 	t.Cleanup(server.Close)
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -153,5 +153,56 @@ func TestPassesOnWhatIsSealedWithoutReadingIt(t *testing.T) {
 	bad, _ := json.Marshal(pushRequest{Token: someToken, Notice: "waiting", Sealed: `","aps":{}`})
 	if err := p.send(context.Background(), bad); err == nil {
 		t.Fatal("something that is not sealed bytes was passed on")
+	}
+}
+
+func TestUpdatesALiveActivityWithCountsAndSealedNames(t *testing.T) {
+	p, calls := apple(t)
+	payload, _ := json.Marshal(pushRequest{Token: someToken, Activity: "update", Waiting: 2, Working: 1, Sealed: "c2VhbGVk"})
+	if err := p.send(context.Background(), payload); err != nil {
+		t.Fatal(err)
+	}
+	got := <-calls
+	if got.topic != "sh.farol.ios.push-type.liveactivity" || got.priority != "5" {
+		t.Fatalf("asked %+v", got)
+	}
+	var sent struct {
+		Aps struct {
+			Event string `json:"event"`
+			Stale int64  `json:"stale-date"`
+			State struct {
+				Waiting, Working int
+				Sealed           string
+			} `json:"content-state"`
+		} `json:"aps"`
+	}
+	json.Unmarshal([]byte(got.body), &sent)
+	if sent.Aps.Event != "update" || sent.Aps.Stale <= time.Now().Unix() || sent.Aps.State.Waiting != 2 || sent.Aps.State.Working != 1 || sent.Aps.State.Sealed != "c2VhbGVk" {
+		t.Fatalf("said %s", got.body)
+	}
+}
+
+func TestRefusesALiveActivityItDoesNotKnow(t *testing.T) {
+	p, _ := apple(t)
+	for _, asked := range []pushRequest{
+		{Token: someToken, Activity: "start"},
+		{Token: someToken, Activity: "update", Waiting: -1},
+		{Token: someToken, Activity: "update", Sealed: "not base64!"},
+	} {
+		payload, _ := json.Marshal(asked)
+		if p.send(context.Background(), payload) == nil {
+			t.Fatalf("sent %+v", asked)
+		}
+	}
+}
+
+func TestOnlyANewlyWaitingAgentIsUrgent(t *testing.T) {
+	p, calls := apple(t)
+	payload, _ := json.Marshal(pushRequest{Token: someToken, Activity: "update", Waiting: 1, Urgent: true})
+	if err := p.send(context.Background(), payload); err != nil {
+		t.Fatal(err)
+	}
+	if got := <-calls; got.priority != "10" {
+		t.Fatalf("priority %s", got.priority)
 	}
 }

@@ -14,6 +14,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
         .notify(token: Data([0xAB, 0x01]), sandbox: true), .notify(token: Data([0xAB]), sandbox: false, notices: [.waiting]),
         .notify(token: Data([0xAB]), sandbox: false, notices: []), .notify(token: Data([1]), sandbox: true, notices: [.done], key: Data([7])),
         .history(session: session), .options, .task(project: "/Users/me/shelf", agent: "claude", text: "fix the flaky test"), .type(session: session, text: "/"), .key(session: session, key: .backspace),
+        .activity(token: Data([0xAB, 0x02]), sandbox: true),
     ] {
         let command = RemoteCommand(action)
         #expect(try roundTrip(command) == command)
@@ -76,4 +77,32 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     let message = RelayFrame.push(token: Data([0xAB]), sandbox: false, notice: .done, sealed: Data([1, 2, 3]))
     let request = try JSONDecoder().decode([String: String].self, from: message.dropFirst())
     #expect(request["sealed"] == "AQID")
+}
+
+@Test func aLiveActivityShowsCountsAndOnlyThePhoneReadsTheNames() throws {
+    let key = NoticeBox.newKey()
+    let sessions = [
+        RemoteSession(id: UUID(), name: "Offline sync", branch: "feat/sync", status: .idle),
+        RemoteSession(id: UUID(), name: "Add fuzzy search", branch: nil, status: .working),
+        RemoteSession(id: UUID(), name: "Fix flaky CI tests", branch: nil, status: .waiting),
+    ]
+    let state = RemoteActivityState(sessions, key: key)
+    #expect(state.waiting == 1 && state.working == 1 && !state.isQuiet)
+    // The one that needs you first, then the one working. Idle ones are left out.
+    #expect(state.sessions(key: key).map(\.name) == ["Fix flaky CI tests", "Add fuzzy search"])
+    #expect(state.sessions(key: NoticeBox.newKey()).isEmpty)
+    #expect(!(state.sealed ?? "").contains("flaky"))
+    #expect(try roundTrip(state) == state)
+    #expect(RemoteActivityState([], key: key).isQuiet)
+}
+
+@Test func aLiveActivityPushCarriesWhatTheRelayExpects() throws {
+    let frame = RelayFrame.activity(token: Data([0xAB, 0x01]), sandbox: false, ending: true, urgent: true, state: RemoteActivityState(waiting: 2, working: 0, sealed: "c2VhbGVk"))
+    #expect(frame.first == 5)
+    let sent = try JSONSerialization.jsonObject(with: frame.dropFirst()) as? [String: Any]
+    #expect(sent?["token"] as? String == "ab01")
+    #expect(sent?["activity"] as? String == "end")
+    #expect(sent?["waiting"] as? Int == 2)
+    #expect(sent?["sealed"] as? String == "c2VhbGVk")
+    #expect(sent?["urgent"] as? Bool == true)
 }
