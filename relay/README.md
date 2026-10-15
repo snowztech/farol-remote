@@ -17,14 +17,13 @@ Put it behind something that speaks TLS and sets `X-Real-IP` or adds to `X-Forwa
 
 ## Deploy relay.farol.sh
 
-For whoever runs Farol's own relay, from this folder:
+Railway deploys relay.farol.sh from GitHub: every push to `main` ships it, with `relay/` as the root directory. To see it start, from this folder:
 
 ```sh
-make deploy   # tests, then ships main to Railway
 make logs     # wait for: farol relay on :8080, notifications on
 ```
 
-It refuses unless you are on `main`, with nothing uncommitted, and the same as `origin/main`, so what runs is always what is on GitHub. It needs the Railway CLI, logged in and linked to the farol-relay project.
+It needs the Railway CLI, logged in and linked to the farol-relay project.
 
 ## Notifications
 
