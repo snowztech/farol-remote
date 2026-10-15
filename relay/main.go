@@ -10,6 +10,8 @@ import (
 )
 
 func main() {
+	// Go logs to stderr, which hosts like Railway show as errors. What the relay says is mostly that it is fine.
+	log.SetOutput(os.Stdout)
 	address := ":8080"
 	if port := os.Getenv("PORT"); port != "" {
 		address = ":" + port
