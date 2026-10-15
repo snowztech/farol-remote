@@ -81,6 +81,8 @@ type pushRequest struct {
 	Activity string `json:"activity"`
 	Waiting  int    `json:"waiting"`
 	Working  int    `json:"working"`
+	// An agent just started waiting. Only then is it worth Apple's budget for urgent Live Activity pushes.
+	Urgent bool `json:"urgent"`
 }
 
 var activityEvents = map[string]bool{"update": true, "end": true}
@@ -98,7 +100,7 @@ func (p *pusher) send(ctx context.Context, asked []byte) error {
 	if !deviceToken.MatchString(request.Token) || len(request.Sealed) > 2000 || !sealedText.MatchString(request.Sealed) {
 		return errors.New("not a notification this relay sends")
 	}
-	payload, kind, topic := map[string]any{}, "alert", p.topic
+	payload, kind, topic, priority := map[string]any{}, "alert", p.topic, "10"
 	if request.Activity != "" {
 		if !activityEvents[request.Activity] || request.Waiting < 0 || request.Working < 0 || request.Waiting > 999 || request.Working > 999 {
 			return errors.New("not a notification this relay sends")
@@ -112,8 +114,15 @@ func (p *pusher) send(ctx context.Context, asked []byte) error {
 		if request.Activity == "end" {
 			// Stays on the lock screen a few minutes with its last state, then goes.
 			aps["dismissal-date"] = time.Now().Add(5 * time.Minute).Unix()
+		} else {
+			// If updates stop, say the Mac slept, iOS shows it as out of date instead of a "working" that no longer is.
+			aps["stale-date"] = time.Now().Add(15 * time.Minute).Unix()
 		}
 		payload["aps"], kind, topic = aps, "liveactivity", p.topic+".push-type.liveactivity"
+		// Apple caps urgent Live Activity pushes per hour. The rest can wait for the phone's next wake.
+		if !request.Urgent {
+			priority = "5"
+		}
 	} else {
 		words, known := notices[request.Notice]
 		if !known {
@@ -143,8 +152,7 @@ func (p *pusher) send(ctx context.Context, asked []byte) error {
 	call.Header.Set("authorization", "bearer "+bearer)
 	call.Header.Set("apns-topic", topic)
 	call.Header.Set("apns-push-type", kind)
-	// ponytail: always urgent. A Mac only sends when a status changes, a few times a minute at most; Apple throttles past its budget.
-	call.Header.Set("apns-priority", "10")
+	call.Header.Set("apns-priority", priority)
 	answer, err := p.client.Do(call)
 	if err != nil {
 		// The error names the address it called, which ends in the phone's token. That has no place in a log.

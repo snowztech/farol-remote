@@ -97,11 +97,12 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
 }
 
 @Test func aLiveActivityPushCarriesWhatTheRelayExpects() throws {
-    let frame = RelayFrame.activity(token: Data([0xAB, 0x01]), sandbox: false, ending: true, state: RemoteActivityState(waiting: 2, working: 0, sealed: "c2VhbGVk"))
+    let frame = RelayFrame.activity(token: Data([0xAB, 0x01]), sandbox: false, ending: true, urgent: true, state: RemoteActivityState(waiting: 2, working: 0, sealed: "c2VhbGVk"))
     #expect(frame.first == 5)
     let sent = try JSONSerialization.jsonObject(with: frame.dropFirst()) as? [String: Any]
     #expect(sent?["token"] as? String == "ab01")
     #expect(sent?["activity"] as? String == "end")
     #expect(sent?["waiting"] as? Int == 2)
     #expect(sent?["sealed"] as? String == "c2VhbGVk")
+    #expect(sent?["urgent"] as? Bool == true)
 }
