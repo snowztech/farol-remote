@@ -155,3 +155,42 @@ func TestPassesOnWhatIsSealedWithoutReadingIt(t *testing.T) {
 		t.Fatal("something that is not sealed bytes was passed on")
 	}
 }
+
+func TestUpdatesALiveActivityWithCountsAndSealedNames(t *testing.T) {
+	p, calls := apple(t)
+	payload, _ := json.Marshal(pushRequest{Token: someToken, Activity: "update", Waiting: 2, Working: 1, Sealed: "c2VhbGVk"})
+	if err := p.send(context.Background(), payload); err != nil {
+		t.Fatal(err)
+	}
+	got := <-calls
+	if got.topic != "sh.farol.ios.push-type.liveactivity" {
+		t.Fatalf("topic %s", got.topic)
+	}
+	var sent struct {
+		Aps struct {
+			Event string `json:"event"`
+			State struct {
+				Waiting, Working int
+				Sealed           string
+			} `json:"content-state"`
+		} `json:"aps"`
+	}
+	json.Unmarshal([]byte(got.body), &sent)
+	if sent.Aps.Event != "update" || sent.Aps.State.Waiting != 2 || sent.Aps.State.Working != 1 || sent.Aps.State.Sealed != "c2VhbGVk" {
+		t.Fatalf("said %s", got.body)
+	}
+}
+
+func TestRefusesALiveActivityItDoesNotKnow(t *testing.T) {
+	p, _ := apple(t)
+	for _, asked := range []pushRequest{
+		{Token: someToken, Activity: "start"},
+		{Token: someToken, Activity: "update", Waiting: -1},
+		{Token: someToken, Activity: "update", Sealed: "not base64!"},
+	} {
+		payload, _ := json.Marshal(asked)
+		if p.send(context.Background(), payload) == nil {
+			t.Fatalf("sent %+v", asked)
+		}
+	}
+}

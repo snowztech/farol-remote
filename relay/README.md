@@ -30,6 +30,8 @@ It refuses unless you are on `main`, with nothing uncommitted, and the same as `
 
 The relay asks Apple to notify a phone when the Mac says an agent is waiting or has finished. That needs a key from the developer of the iOS app, so only the relay that developer runs can do it. Without the key the relay works as before and sends none.
 
+The same key keeps a phone's Live Activity up to date: how many agents wait and how many work. Apple and the relay see only those two numbers. The session names go along sealed, and only the phone opens them.
+
 | Variable | What it is |
 | --- | --- |
 | `APNS_KEY` | The text of the `.p8` key from Apple's developer site |

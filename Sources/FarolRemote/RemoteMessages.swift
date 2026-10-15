@@ -40,6 +40,39 @@ public struct RemoteSession: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+/// What a Live Activity shows. The relay writes it into the push from what the Mac sends, so the names match `relay/push.go`.
+/// The counts are all Apple and the relay see. `sealed` is the sessions, from `NoticeBox`, which only the phone opens.
+public struct RemoteActivityState: Codable, Hashable, Sendable {
+    public var waiting: Int
+    public var working: Int
+    public var sealed: String?
+
+    public init(waiting: Int, working: Int, sealed: String? = nil) {
+        self.waiting = waiting
+        self.working = working
+        self.sealed = sealed
+    }
+
+    /// The counts, and the first few sessions that need you or work, sealed with the phone's key.
+    /// Only a few, since Apple caps a push at 4 KB and the relay a sealed part at 2000 characters.
+    public init(_ sessions: [RemoteSession], key: Data?) {
+        let needsYou = sessions.filter { $0.status == .waiting || $0.status == .stopped }
+        let working = sessions.filter { $0.status == .working }
+        let shown = (needsYou + working).prefix(4).map { RemoteSession(id: $0.id, name: String($0.name.prefix(60)), branch: nil, status: $0.status) }
+        self.init(waiting: needsYou.count, working: working.count,
+                  sealed: key.flatMap { NoticeBox.seal(Array(shown), key: $0) }?.base64EncodedString())
+    }
+
+    /// Nothing waits and nothing works, so there is nothing left to follow.
+    public var isQuiet: Bool { waiting == 0 && working == 0 }
+
+    /// The sessions it names, once opened with the phone's key. Empty when it cannot be opened.
+    public func sessions(key: Data?) -> [RemoteSession] {
+        guard let key, let sealed, let data = Data(base64Encoded: sealed) else { return [] }
+        return NoticeBox.open(data, as: [RemoteSession].self, key: key) ?? []
+    }
+}
+
 /// A project or an agent a new task can use. The id means something to the Mac only, and the phone hands it back as it came.
 public struct RemoteChoice: Codable, Equatable, Identifiable, Hashable, Sendable {
     public var id: String
@@ -69,6 +102,9 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         /// `notices` is what the phone wants to hear about. An older phone leaves it out, and hears about everything.
         /// `key` lets the Mac seal which session a notification is about, so only this phone can read it.
         case notify(token: Data, sandbox: Bool, notices: [RemoteNotice]? = nil, key: Data? = nil)
+        /// Where Apple can reach the Live Activity this phone started, to keep it current while the app is closed.
+        /// A Mac that does not know it refuses it, and the phone goes on without updates.
+        case activity(token: Data, sandbox: Bool)
         /// What scrolled off the top of a session's screen. Asked for once, when someone wants to read back.
         case history(session: UUID)
         /// What a new task can be started in and with. Asked for when the phone opens its New task sheet.
