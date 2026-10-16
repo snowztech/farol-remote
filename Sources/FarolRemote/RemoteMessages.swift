@@ -11,6 +11,8 @@ public enum RemoteProtocol {
 /// A key that isn't text, for a prompt that waits on Return or an arrow.
 public enum RemoteKey: String, Codable, CaseIterable, Sendable {
     case enter, escape, tab, up, down, left, right, backspace
+    /// Shift-Tab, which Claude Code takes to switch between its modes.
+    case shiftTab
     /// Control-C.
     case interrupt
 }
@@ -116,6 +118,8 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         /// Opens a new session in a project from `options`, like a new tab on the host. It runs the agent with that id from `options`,
         /// or is a plain shell when `agent` is nil. Ids only, so a phone picks from the host's lists and never sends a command to run.
         case open(project: String, agent: String?)
+        /// Closes a session, as its tab's close button on the host. A host keeps its last session open, and says so.
+        case close(session: UUID)
     }
 
     public init(id: UUID = UUID(), _ action: Action) {
