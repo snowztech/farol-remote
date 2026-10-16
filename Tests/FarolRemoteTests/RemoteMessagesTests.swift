@@ -19,7 +19,9 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
         .open(project: "/Users/me/shelf", agent: "claude"), .open(project: "/Users/me/shelf", agent: nil),
         .close(session: session), .key(session: session, key: .shiftTab),
         .conversation(session: session, before: nil), .conversation(session: session, before: "a1b2.0"),
-        .scroll(session: session, by: 20), .scroll(session: session, by: -20), .changes(session: session), .diff(session: session, path: "Sources/App.swift"),
+        .changes(session: session), .diff(session: session, path: "Sources/App.swift"),
+        .answer(session: session, request: "toolu_01", choice: 2),
+        .terminal(session: session, open: true), .control(session: session, key: "d"),
     ] {
         let command = RemoteCommand(action)
         #expect(try roundTrip(command) == command)
@@ -47,6 +49,11 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
             RemoteMessage(id: "b", role: .tool, text: "Run the tests", tool: "Bash", detail: "npm test"),
         ], place: .latest, more: true),
         .diff(session: session.id, path: "Sources/App.swift", text: "@@ -1,2 +1,2 @@\n-old\n+new\n same"),
+        .request(session: session.id, request: RemoteRequest(id: "toolu_01", tool: "Bash", title: "npm test", detail: "npm test -- --watch=false")),
+        .request(session: session.id, request: RemoteRequest(id: "toolu_02", tool: nil, title: "Which database?", choices: [
+            RemoteRequest.Choice(label: "SQLite", detail: "One file, nothing to run"), RemoteRequest.Choice(label: "Postgres"),
+        ])),
+        .request(session: session.id, request: nil),
     ] {
         #expect(try roundTrip(event) == event)
     }

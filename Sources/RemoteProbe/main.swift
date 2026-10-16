@@ -79,6 +79,10 @@ final class Probe {
         case .event(.conversation(_, let messages, let place, let more)):
             print("# conversation \(messages.count) messages, \(place)\(more ? ", more before" : "")")
             messages.forEach { print("  \($0.role.rawValue): \($0.tool.map { "[\($0)] " } ?? "")\($0.text.prefix(80))") }
+        case .event(.request(_, let request?)):
+            print("# waits on \(request.tool ?? "a question"): \(request.title)")
+            request.choices.enumerated().forEach { print("  \($0.offset + 1). \($0.element.label)") }
+        case .event(.request(_, nil)): print("# no longer waits")
         case .event(.refused(_, let why)): print("! refused: \(why)")
         case .refused(let why): print("! \(why)")
         case .close: print("! connection closed")

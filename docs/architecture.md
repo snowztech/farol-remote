@@ -20,6 +20,6 @@ Three programs take part in Remote: a host that owns the sessions, the relay in 
 
 The phone sends a `RemoteCommand`, and the host answers with a `RemoteEvent`. Both are in `RemoteMessages.swift`. Each one travels sealed inside a `WireFrame`, and the relay adds one byte in front that says what the frame is: data, joined, left, online, offline or push.
 
-The host always sends the session list and the screen in full, so a phone that missed some has nothing to replay. A command carries its own id, so one that arrives twice is carried out once.
+The host always sends the session list and the screen in full, so a phone that missed some has nothing to replay. The screen goes only while the phone shows the terminal, or while the agent waits on something its hooks did not describe. What a waiting agent asks comes as a `request`, and the phone answers it by its id, so a late answer is refused rather than typed into the next prompt. A command carries its own id, so one that arrives twice is carried out once.
 
 How a connection is set up is in [security.md](security.md).
