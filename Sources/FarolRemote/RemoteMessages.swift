@@ -6,6 +6,9 @@ public enum RemoteProtocol {
     public static let version = 1
 
     public static func accepts(_ other: Int) -> Bool { other == version }
+
+    /// Why a host refuses a command it does not know. Either side may be the older one, so it asks to update both.
+    public static let mismatch = "Farol on the Mac and Farol for iPhone are different versions. Update both to use this."
 }
 
 /// A key that isn't text, for a prompt that waits on Return or an arrow.

@@ -125,11 +125,12 @@ public struct MacLink {
             return [.ready(device)]
         case .sealed(let sealed):
             guard open, let plain = try? channel?.open(sealed) else { return [.close] }
-            // One that opens and does not read is from a newer phone. It is told so, so it does not wait for an answer.
+            // One that opens and does not read is from a phone of another version, newer or one that still sends what was removed.
+            // It is told so, so it does not wait for an answer.
             guard let command = try? JSONDecoder().decode(RemoteCommand.self, from: plain) else {
                 struct Unknown: Decodable { var id: UUID }
                 guard let id = (try? JSONDecoder().decode(Unknown.self, from: plain))?.id,
-                      let answer = seal(.refused(command: id, reason: "This version of Farol does not know how to do that. Update Farol on the Mac.")) else { return [] }
+                      let answer = seal(.refused(command: id, reason: RemoteProtocol.mismatch)) else { return [] }
                 return [.send(answer)]
             }
             return [.command(command)]
