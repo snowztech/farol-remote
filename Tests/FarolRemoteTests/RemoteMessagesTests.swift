@@ -18,6 +18,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
         .activity(token: Data([0xAB, 0x02]), sandbox: true),
         .open(project: "/Users/me/shelf", agent: "claude"), .open(project: "/Users/me/shelf", agent: nil),
         .close(session: session), .key(session: session, key: .shiftTab),
+        .scroll(session: session, by: 20), .scroll(session: session, by: -20), .changes(session: session), .diff(session: session, path: "Sources/App.swift"),
     ] {
         let command = RemoteCommand(action)
         #expect(try roundTrip(command) == command)
@@ -32,6 +33,13 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
         .done(command: command), .refused(command: command, reason: "Remote is off."), .history(session: session.id, text: "earlier\nlines"),
         .options(projects: [RemoteChoice(id: "/Users/me/shelf", name: "shelf")], agents: [RemoteChoice(id: "a", name: "Claude Code")], agent: "a"),
         .opened(command: command, session: session.id),
+        .changes(session: session.id, scope: "Uncommitted", files: [
+            RemoteChange(path: "Sources/App.swift", status: .modified, added: 12, removed: 3),
+            RemoteChange(path: "New.swift", oldPath: "Old.swift", status: .renamed, added: 0, removed: 0),
+            RemoteChange(path: "icon.png", status: .added, added: 0, removed: 0, binary: true),
+        ]),
+        .changes(session: session.id, scope: "Since main", files: []),
+        .diff(session: session.id, path: "Sources/App.swift", text: "@@ -1,2 +1,2 @@\n-old\n+new\n same"),
     ] {
         #expect(try roundTrip(event) == event)
     }

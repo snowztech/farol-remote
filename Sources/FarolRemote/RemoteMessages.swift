@@ -42,6 +42,33 @@ public struct RemoteSession: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+/// A file changed in a session's repository.
+public struct RemoteChange: Codable, Equatable, Identifiable, Sendable {
+    public enum Status: String, Codable, Sendable {
+        case modified, added, deleted, renamed
+    }
+
+    public var path: String
+    /// Where a renamed file was before.
+    public var oldPath: String?
+    public var status: Status
+    public var added: Int
+    public var removed: Int
+    /// No lines to count or show.
+    public var binary: Bool
+
+    public var id: String { path }
+
+    public init(path: String, oldPath: String? = nil, status: Status, added: Int, removed: Int, binary: Bool = false) {
+        self.path = path
+        self.oldPath = oldPath
+        self.status = status
+        self.added = added
+        self.removed = removed
+        self.binary = binary
+    }
+}
+
 /// What a Live Activity shows. The relay writes it into the push from what the Mac sends, so the names match `relay/push.go`.
 /// The counts are all Apple and the relay see. `sealed` is the sessions, from `NoticeBox`, which only the phone opens.
 public struct RemoteActivityState: Codable, Hashable, Sendable {
@@ -120,6 +147,13 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         case open(project: String, agent: String?)
         /// Closes a session, as its tab's close button on the host. A host keeps its last session open, and says so.
         case close(session: UUID)
+        /// Scrolls a session as the mouse wheel would, by lines. Positive goes back. A full-screen agent like Claude Code keeps
+        /// its earlier output itself, out of the terminal's own history, and scrolls its own view back to show it.
+        case scroll(session: UUID, by: Int)
+        /// The files changed in a session's repository, as the host's review panel compares them.
+        case changes(session: UUID)
+        /// One of those files, as a unified diff.
+        case diff(session: UUID, path: String)
     }
 
     public init(id: UUID = UUID(), _ action: Action) {
@@ -140,6 +174,10 @@ public enum RemoteEvent: Codable, Equatable, Sendable {
     case done(command: UUID)
     /// The session an `open` made, so the phone can go straight to it. It answers that command, as `done` does.
     case opened(command: UUID, session: UUID)
+    /// Answers `changes`. `scope` says what they are compared with, like "Uncommitted" or "Since main".
+    case changes(session: UUID, scope: String, files: [RemoteChange])
+    /// Answers `diff`: the file as a unified diff, `@@` headers and `+`, `-` and ` ` lines, cut short if very long.
+    case diff(session: UUID, path: String, text: String)
     case refused(command: UUID, reason: String)
 }
 

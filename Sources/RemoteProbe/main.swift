@@ -72,6 +72,10 @@ final class Probe {
         case .event(.options(let projects, let agents, _)): print("# projects \(projects.map(\.name)) agents \(agents.map(\.name))")
         case .event(.done): print("# done")
         case .event(.opened(_, let session)): print("# opened \(session)")
+        case .event(.changes(_, let scope, let files)):
+            print("# changes, \(scope)")
+            files.forEach { print("  +\($0.added) -\($0.removed)  \($0.status.rawValue)  \($0.path)") }
+        case .event(.diff(_, let path, let text)): print("# diff \(path)\n\(text)\n# end")
         case .event(.refused(_, let why)): print("! refused: \(why)")
         case .refused(let why): print("! \(why)")
         case .close: print("! connection closed")
