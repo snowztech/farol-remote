@@ -144,6 +144,21 @@ public struct RemoteRequest: Codable, Equatable, Sendable {
     }
 }
 
+/// Something an agent takes after a slash: one of its own, a skill or command of yours or the project's, or a plugin's.
+public struct RemoteAgentCommand: Codable, Equatable, Sendable {
+    /// Without the slash, like "compact" or "frontend-design:review".
+    public var name: String
+    public var detail: String?
+    /// It opens a picker in the agent's terminal, like /model, so the phone shows the terminal once it is sent.
+    public var menu: Bool
+
+    public init(name: String, detail: String? = nil, menu: Bool = false) {
+        self.name = name
+        self.detail = detail
+        self.menu = menu
+    }
+}
+
 /// A file changed in a session's repository.
 public struct RemoteChange: Codable, Equatable, Identifiable, Sendable {
     public enum Status: String, Codable, Sendable {
@@ -265,6 +280,8 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         case terminal(session: UUID, open: Bool)
         /// A letter with Control held, like Control-D to end a shell or Control-R to search its history. `key` is one of a to z.
         case control(session: UUID, key: String)
+        /// What the agent in a session takes after a slash. Asked once, when a reply starts with one.
+        case commands(session: UUID)
     }
 
     public init(id: UUID = UUID(), _ action: Action) {
@@ -293,6 +310,8 @@ public enum RemoteEvent: Codable, Equatable, Sendable {
     case diff(session: UUID, path: String, text: String)
     /// What the watched session waits on you for, sent when it changes. Nil once it no longer waits.
     case request(session: UUID, request: RemoteRequest?)
+    /// Answers `commands`, sorted by name.
+    case commands(session: UUID, commands: [RemoteAgentCommand])
     case refused(command: UUID, reason: String)
 }
 

@@ -21,7 +21,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
         .conversation(session: session, before: nil), .conversation(session: session, before: "a1b2.0"),
         .changes(session: session), .diff(session: session, path: "Sources/App.swift"),
         .answer(session: session, request: "toolu_01", choice: 2),
-        .terminal(session: session, open: true), .control(session: session, key: "d"),
+        .terminal(session: session, open: true), .control(session: session, key: "d"), .commands(session: session),
     ] {
         let command = RemoteCommand(action)
         #expect(try roundTrip(command) == command)
@@ -54,6 +54,9 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
             RemoteRequest.Choice(label: "SQLite", detail: "One file, nothing to run"), RemoteRequest.Choice(label: "Postgres"),
         ])),
         .request(session: session.id, request: nil),
+        .commands(session: session.id, commands: [
+            RemoteAgentCommand(name: "compact", detail: "Summarize the conversation"), RemoteAgentCommand(name: "model", menu: true),
+        ]),
     ] {
         #expect(try roundTrip(event) == event)
     }

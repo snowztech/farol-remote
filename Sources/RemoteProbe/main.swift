@@ -83,6 +83,7 @@ final class Probe {
             print("# waits on \(request.tool ?? "a question"): \(request.title)")
             request.choices.enumerated().forEach { print("  \($0.offset + 1). \($0.element.label)") }
         case .event(.request(_, nil)): print("# no longer waits")
+        case .event(.commands(_, let commands)): print("# commands " + commands.map { "/" + $0.name }.joined(separator: " "))
         case .event(.refused(_, let why)): print("! refused: \(why)")
         case .refused(let why): print("! \(why)")
         case .close: print("! connection closed")
