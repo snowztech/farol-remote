@@ -21,6 +21,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
         .conversation(session: session, before: nil), .conversation(session: session, before: "a1b2.0"),
         .scroll(session: session, by: 20), .scroll(session: session, by: -20), .changes(session: session), .diff(session: session, path: "Sources/App.swift"),
         .answer(session: session, request: "toolu_01", choice: 2),
+        .terminal(session: session, open: true), .control(session: session, key: "d"),
     ] {
         let command = RemoteCommand(action)
         #expect(try roundTrip(command) == command)

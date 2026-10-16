@@ -260,6 +260,11 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         /// Picks the answer numbered `choice`, from 1, as the agent numbers them. Only while `request` is still the one waiting,
         /// so a tap that arrives late is refused rather than typed into whatever the agent shows next.
         case answer(session: UUID, request: String, choice: Int)
+        /// The phone shows the session's terminal, or stopped showing it. While it does, the host sends its screen often.
+        /// A phone that never says gets the screen as before, which is how a host tells an older phone apart.
+        case terminal(session: UUID, open: Bool)
+        /// A letter with Control held, like Control-D to end a shell or Control-R to search its history. `key` is one of a to z.
+        case control(session: UUID, key: String)
     }
 
     public init(id: UUID = UUID(), _ action: Action) {
