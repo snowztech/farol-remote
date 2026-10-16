@@ -52,6 +52,33 @@ public enum RemotePlace: Codable, Equatable, Sendable {
     case after(String)
 }
 
+/// A session's conversation as far as the phone has it, put together from the host's `conversation` events.
+public struct RemoteConversation: Equatable, Sendable {
+    public private(set) var messages: [RemoteMessage] = []
+    /// The host has messages before the first one here.
+    public private(set) var hasEarlier = false
+
+    public init() {}
+
+    /// Puts messages where the host says they go. False when they do not fit what is here, like a page before a message
+    /// that is no longer first, and then nothing changes. The phone asks for the latest page again to be sure.
+    public mutating func take(_ new: [RemoteMessage], at place: RemotePlace, more: Bool) -> Bool {
+        switch place {
+        case .latest:
+            messages = new
+            hasEarlier = more
+        case .before(let id):
+            guard messages.first?.id == id else { return false }
+            messages = new + messages
+            hasEarlier = more
+        case .after(let id):
+            guard messages.last?.id == id else { return false }
+            messages += new
+        }
+        return true
+    }
+}
+
 /// One step of an agent's conversation, as its log records it.
 public struct RemoteMessage: Codable, Equatable, Identifiable, Sendable {
     public enum Role: String, Codable, Sendable {
