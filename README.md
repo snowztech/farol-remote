@@ -23,6 +23,7 @@ Every tmux session on that machine is then one the phone can open. The Mac and s
 
 - [Architecture](docs/architecture.md): the parts, where they live, and the messages between them
 - [Security](docs/security.md): pairing, the encrypted channel, what the relay sees, and what is not covered yet
+- [Testing](docs/testing.md): what to try with a real Mac, iPhone and agent before Remote goes to testers
 - [Roadmap](ROADMAP.md)
 - [Terms](CONTEXT.md): host, device, session, relay
 
