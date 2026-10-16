@@ -17,6 +17,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
         .history(session: session), .options, .task(project: "/Users/me/shelf", agent: "claude", text: "fix the flaky test"), .type(session: session, text: "/"), .key(session: session, key: .backspace),
         .activity(token: Data([0xAB, 0x02]), sandbox: true),
         .open(project: "/Users/me/shelf", agent: "claude"), .open(project: "/Users/me/shelf", agent: nil),
+        .close(session: session), .key(session: session, key: .shiftTab),
     ] {
         let command = RemoteCommand(action)
         #expect(try roundTrip(command) == command)
