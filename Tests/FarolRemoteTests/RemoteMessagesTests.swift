@@ -22,6 +22,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
         .changes(session: session), .diff(session: session, path: "Sources/App.swift"),
         .answer(session: session, request: "toolu_01", choice: 2),
         .terminal(session: session, open: true), .control(session: session, key: "d"), .commands(session: session),
+        .attach(session: session, attachment: UUID(), part: 1, parts: 3, data: Data([0xFF, 0xD8, 0xFF])),
     ] {
         let command = RemoteCommand(action)
         #expect(try roundTrip(command) == command)
@@ -54,6 +55,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
             RemoteRequest.Choice(label: "SQLite", detail: "One file, nothing to run"), RemoteRequest.Choice(label: "Postgres"),
         ])),
         .request(session: session.id, request: nil),
+        .attached(command: command, attachment: UUID(), path: "/Users/me/Library/Caches/Farol/Attachments/a.jpg"),
         .commands(session: session.id, commands: [
             RemoteAgentCommand(name: "compact", detail: "Summarize the conversation"), RemoteAgentCommand(name: "model", menu: true), RemoteAgentCommand(name: "farol", mention: true),
         ]),
@@ -155,4 +157,17 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     // A rewind on the host sends the latest page instead of everything.
     #expect(take(["a", "f"], at: .latest))
     #expect(conversation.messages.map(\.id) == ["a", "f"])
+}
+
+@Test func aPictureSplitsIntoPartsThatFitAMessageAndJoinBackWhole() throws {
+    let picture = Data((0..<(RemoteAttachment.partSize * 2 + 10)).map { UInt8($0 % 251) })
+    let parts = RemoteAttachment.parts(of: picture)
+    #expect(parts.count == 3)
+    #expect(parts.last?.count == 10)
+    #expect(parts.reduce(Data(), +) == picture)
+    // Sealed, framed and addressed, the largest part still fits one message of the relay, with room to spare.
+    let command = try JSONEncoder().encode(RemoteCommand(.attach(session: UUID(), attachment: UUID(), part: 0, parts: 3, data: parts[0])))
+    let sealed = Data(count: command.count + 64)
+    let message = RelayFrame.encode(try JSONEncoder().encode(WireFrame.sealed(sealed)), to: 1)
+    #expect(message.count < 200_000)
 }

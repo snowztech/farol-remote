@@ -165,6 +165,20 @@ public struct RemoteAgentCommand: Codable, Equatable, Sendable {
     public var sigil: Character { mention ? "$" : "/" }
 }
 
+/// A picture sent from the phone to the host, for an agent to look at. It travels in parts, since a message holds at most 256 KB.
+public enum RemoteAttachment {
+    /// Small enough that a part stays well under a message once sealed. It is base64 twice on the way, in the command and in the frame
+    /// around the sealed command, so a part grows by about four fifths.
+    public static let partSize = 100_000
+    /// A photo the phone has made smaller is far below this. Anything larger is not what attaching is for.
+    public static let maxSize = 10 << 20
+
+    /// The parts to send, in order.
+    public static func parts(of data: Data) -> [Data] {
+        stride(from: 0, to: data.count, by: partSize).map { data[$0..<min($0 + partSize, data.count)] }.map { Data($0) }
+    }
+}
+
 /// A file changed in a session's repository.
 public struct RemoteChange: Codable, Equatable, Identifiable, Sendable {
     public enum Status: String, Codable, Sendable {
@@ -288,6 +302,9 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         case control(session: UUID, key: String)
         /// What the agent in a session takes after a slash. Asked once, when a reply starts with one.
         case commands(session: UUID)
+        /// One part of a picture, `part` counting from 0 of `parts`. The host answers each one before the next goes, with `done`,
+        /// and the last with `attached`. Sent again after a dropped connection, a part already taken is taken once.
+        case attach(session: UUID, attachment: UUID, part: Int, parts: Int, data: Data)
     }
 
     public init(id: UUID = UUID(), _ action: Action) {
@@ -316,6 +333,8 @@ public enum RemoteEvent: Codable, Equatable, Sendable {
     case diff(session: UUID, path: String, text: String)
     /// What the watched session waits on you for, sent when it changes. Nil once it no longer waits.
     case request(session: UUID, request: RemoteRequest?)
+    /// Answers the last part of `attach`: where the host put the picture, to put in a reply. The host names the file, never the phone.
+    case attached(command: UUID, attachment: UUID, path: String)
     /// Answers `commands`, sorted by name.
     case commands(session: UUID, commands: [RemoteAgentCommand])
     case refused(command: UUID, reason: String)
