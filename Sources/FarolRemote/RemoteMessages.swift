@@ -146,17 +146,23 @@ public struct RemoteRequest: Codable, Equatable, Sendable {
 
 /// Something an agent takes after a slash: one of its own, a skill or command of yours or the project's, or a plugin's.
 public struct RemoteAgentCommand: Codable, Equatable, Sendable {
-    /// Without the slash, like "compact" or "frontend-design:review".
+    /// Without the slash or dollar sign, like "compact" or "frontend-design:review".
     public var name: String
     public var detail: String?
     /// It opens a picker in the agent's terminal, like /model, so the phone shows the terminal once it is sent.
     public var menu: Bool
+    /// Called with a dollar sign rather than a slash, as Codex mentions a skill: `$name`.
+    public var mention: Bool
 
-    public init(name: String, detail: String? = nil, menu: Bool = false) {
+    public init(name: String, detail: String? = nil, menu: Bool = false, mention: Bool = false) {
         self.name = name
         self.detail = detail
         self.menu = menu
+        self.mention = mention
     }
+
+    /// What it is typed with, a slash or a dollar sign.
+    public var sigil: Character { mention ? "$" : "/" }
 }
 
 /// A file changed in a session's repository.

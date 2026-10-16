@@ -55,7 +55,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
         ])),
         .request(session: session.id, request: nil),
         .commands(session: session.id, commands: [
-            RemoteAgentCommand(name: "compact", detail: "Summarize the conversation"), RemoteAgentCommand(name: "model", menu: true),
+            RemoteAgentCommand(name: "compact", detail: "Summarize the conversation"), RemoteAgentCommand(name: "model", menu: true), RemoteAgentCommand(name: "farol", mention: true),
         ]),
     ] {
         #expect(try roundTrip(event) == event)
