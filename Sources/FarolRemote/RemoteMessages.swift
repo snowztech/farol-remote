@@ -113,6 +113,9 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         case options
         /// Starts an agent on a task in a new worktree. `project` and `agent` are ids from `options`.
         case task(project: String, agent: String, text: String)
+        /// Opens a new session in a project from `options`, like a new tab on the host. It runs the agent with that id from `options`,
+        /// or is a plain shell when `agent` is nil. Ids only, so a phone picks from the host's lists and never sends a command to run.
+        case open(project: String, agent: String?)
     }
 
     public init(id: UUID = UUID(), _ action: Action) {
@@ -131,6 +134,8 @@ public enum RemoteEvent: Codable, Equatable, Sendable {
     case history(session: UUID, text: String)
     case options(projects: [RemoteChoice], agents: [RemoteChoice], agent: String?)
     case done(command: UUID)
+    /// The session an `open` made, so the phone can go straight to it. It answers that command, as `done` does.
+    case opened(command: UUID, session: UUID)
     case refused(command: UUID, reason: String)
 }
 

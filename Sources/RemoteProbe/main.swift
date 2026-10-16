@@ -71,6 +71,7 @@ final class Probe {
         case .event(.history(_, let text)): print("# history\n\(text)\n# end")
         case .event(.options(let projects, let agents, _)): print("# projects \(projects.map(\.name)) agents \(agents.map(\.name))")
         case .event(.done): print("# done")
+        case .event(.opened(_, let session)): print("# opened \(session)")
         case .event(.refused(_, let why)): print("! refused: \(why)")
         case .refused(let why): print("! \(why)")
         case .close: print("! connection closed")
