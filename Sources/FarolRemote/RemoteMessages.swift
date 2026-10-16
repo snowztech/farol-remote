@@ -108,6 +108,39 @@ public struct RemoteMessage: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+/// What an agent waits on you for: a tool it asks to run, or a question. From the agent's hooks, so the phone shows exactly what is asked
+/// without reading it off the screen.
+public struct RemoteRequest: Codable, Equatable, Sendable {
+    /// Tells this request from the next one, so an answer to one that is gone is never typed into another.
+    public var id: String
+    /// The tool asking, like "Bash" or "Edit". Nil for a question.
+    public var tool: String?
+    /// One line: the command, the file, or the question.
+    public var title: String
+    /// What it does in full: a script, an edit as a unified diff, or what a question is about.
+    public var detail: String?
+    /// The answers, in the order the agent numbers them. Empty when the hook does not say, and the phone reads them off the screen.
+    public var choices: [Choice]
+
+    public struct Choice: Codable, Equatable, Sendable {
+        public var label: String
+        public var detail: String?
+
+        public init(label: String, detail: String? = nil) {
+            self.label = label
+            self.detail = detail
+        }
+    }
+
+    public init(id: String, tool: String?, title: String, detail: String? = nil, choices: [Choice] = []) {
+        self.id = id
+        self.tool = tool
+        self.title = title
+        self.detail = detail
+        self.choices = choices
+    }
+}
+
 /// A file changed in a session's repository.
 public struct RemoteChange: Codable, Equatable, Identifiable, Sendable {
     public enum Status: String, Codable, Sendable {
@@ -224,6 +257,9 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         /// Nil asks for the latest messages, and the host then sends new ones as they come while the session is watched.
         /// A message's id asks for the page just before it, to read further back.
         case conversation(session: UUID, before: String?)
+        /// Picks the answer numbered `choice`, from 1, as the agent numbers them. Only while `request` is still the one waiting,
+        /// so a tap that arrives late is refused rather than typed into whatever the agent shows next.
+        case answer(session: UUID, request: String, choice: Int)
     }
 
     public init(id: UUID = UUID(), _ action: Action) {
@@ -250,6 +286,8 @@ public enum RemoteEvent: Codable, Equatable, Sendable {
     case conversation(session: UUID, messages: [RemoteMessage], place: RemotePlace, more: Bool)
     /// Answers `diff`: the file as a unified diff, `@@` headers and `+`, `-` and ` ` lines, cut short if very long.
     case diff(session: UUID, path: String, text: String)
+    /// What the watched session waits on you for, sent when it changes. Nil once it no longer waits.
+    case request(session: UUID, request: RemoteRequest?)
     case refused(command: UUID, reason: String)
 }
 
