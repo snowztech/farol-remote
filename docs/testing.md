@@ -37,6 +37,15 @@ Ask the agent for something that needs permission, like "run `ls` in a new folde
 - [ ] `/clear` in Claude Code, from the phone: the conversation starts over.
 - [ ] Stop, and Interrupt from the ⋯ menu, stop the agent.
 
+## Pictures
+
+- [ ] + in the reply picks a screenshot. Its thumbnail fills a ring as it goes, and Send waits for it.
+- [ ] Sent with a question, the agent looks at the picture and answers about it, in Claude Code and in Codex.
+- [ ] Your message shows "Picture" above your words, not a path.
+- [ ] Four photos at once all arrive. A large photo from the camera arrives too, made smaller on the way.
+- [ ] Turn on airplane mode while a picture is on its way, then off: it finishes, once.
+- [ ] The file is in ~/Library/Caches/Farol/Attachments on the Mac, and only you can read it.
+
 ## Terminal
 
 - [ ] The terminal icon opens the terminal as a screen. Typing `ls` there shows its output within a moment.

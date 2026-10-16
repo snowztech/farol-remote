@@ -14,6 +14,10 @@ The phone answers with one sealed HPKE message, which proves at once that it hol
 
 Each side sends a hello in the clear, with its public key and a number made for this connection. Then each direction becomes an HPKE stream, sealed to the other side's key and signed with its own. Both streams are tied to the two numbers, so a recording of an older connection does not open, and messages open only in the order they were sealed.
 
+## Pictures from the phone
+
+A phone can send a picture for an agent to look at. The Mac takes only a JPEG, PNG or HEIC, read from its first bytes, up to 10 MB. It names the file itself, in a folder only you can read, and removes it after a week. The phone never chooses a path or a file type.
+
 ## What the relay sees
 
 - A public key, and a room name that is the hash of the host's key.

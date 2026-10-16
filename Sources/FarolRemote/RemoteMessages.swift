@@ -144,6 +144,41 @@ public struct RemoteRequest: Codable, Equatable, Sendable {
     }
 }
 
+/// Something an agent takes after a slash: one of its own, a skill or command of yours or the project's, or a plugin's.
+public struct RemoteAgentCommand: Codable, Equatable, Sendable {
+    /// Without the slash or dollar sign, like "compact" or "frontend-design:review".
+    public var name: String
+    public var detail: String?
+    /// It opens a picker in the agent's terminal, like /model, so the phone shows the terminal once it is sent.
+    public var menu: Bool
+    /// Called with a dollar sign rather than a slash, as Codex mentions a skill: `$name`.
+    public var mention: Bool
+
+    public init(name: String, detail: String? = nil, menu: Bool = false, mention: Bool = false) {
+        self.name = name
+        self.detail = detail
+        self.menu = menu
+        self.mention = mention
+    }
+
+    /// What it is typed with, a slash or a dollar sign.
+    public var sigil: Character { mention ? "$" : "/" }
+}
+
+/// A picture sent from the phone to the host, for an agent to look at. It travels in parts, since a message holds at most 256 KB.
+public enum RemoteAttachment {
+    /// Small enough that a part stays well under a message once sealed. It is base64 twice on the way, in the command and in the frame
+    /// around the sealed command, so a part grows by about four fifths.
+    public static let partSize = 100_000
+    /// A photo the phone has made smaller is far below this. Anything larger is not what attaching is for.
+    public static let maxSize = 10 << 20
+
+    /// The parts to send, in order.
+    public static func parts(of data: Data) -> [Data] {
+        stride(from: 0, to: data.count, by: partSize).map { data[$0..<min($0 + partSize, data.count)] }.map { Data($0) }
+    }
+}
+
 /// A file changed in a session's repository.
 public struct RemoteChange: Codable, Equatable, Identifiable, Sendable {
     public enum Status: String, Codable, Sendable {
@@ -265,6 +300,11 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         case terminal(session: UUID, open: Bool)
         /// A letter with Control held, like Control-D to end a shell or Control-R to search its history. `key` is one of a to z.
         case control(session: UUID, key: String)
+        /// What the agent in a session takes after a slash. Asked once, when a reply starts with one.
+        case commands(session: UUID)
+        /// One part of a picture, `part` counting from 0 of `parts`. The host answers each one before the next goes, with `done`,
+        /// and the last with `attached`. Sent again after a dropped connection, a part already taken is taken once.
+        case attach(session: UUID, attachment: UUID, part: Int, parts: Int, data: Data)
     }
 
     public init(id: UUID = UUID(), _ action: Action) {
@@ -293,6 +333,10 @@ public enum RemoteEvent: Codable, Equatable, Sendable {
     case diff(session: UUID, path: String, text: String)
     /// What the watched session waits on you for, sent when it changes. Nil once it no longer waits.
     case request(session: UUID, request: RemoteRequest?)
+    /// Answers the last part of `attach`: where the host put the picture, to put in a reply. The host names the file, never the phone.
+    case attached(command: UUID, attachment: UUID, path: String)
+    /// Answers `commands`, sorted by name.
+    case commands(session: UUID, commands: [RemoteAgentCommand])
     case refused(command: UUID, reason: String)
 }
 
