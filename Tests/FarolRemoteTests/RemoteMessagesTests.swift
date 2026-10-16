@@ -18,7 +18,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
         .activity(token: Data([0xAB, 0x02]), sandbox: true),
         .open(project: "/Users/me/shelf", agent: "claude"), .open(project: "/Users/me/shelf", agent: nil),
         .close(session: session), .key(session: session, key: .shiftTab),
-        .conversation(session: session, before: nil), .conversation(session: session, before: 40),
+        .conversation(session: session, before: nil), .conversation(session: session, before: "a1b2.0"),
         .scroll(session: session, by: 20), .scroll(session: session, by: -20), .changes(session: session), .diff(session: session, path: "Sources/App.swift"),
     ] {
         let command = RemoteCommand(action)
@@ -40,10 +40,12 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
             RemoteChange(path: "icon.png", status: .added, added: 0, removed: 0, binary: true),
         ]),
         .changes(session: session.id, scope: "Since main", files: []),
-        .conversation(session: session.id, from: 0, total: 2, messages: [
+        .conversation(session: session.id, messages: [], place: .after("x"), more: false),
+        .conversation(session: session.id, messages: [RemoteMessage(id: "c", role: .agent, text: "Done.")], place: .before("d"), more: true),
+        .conversation(session: session.id, messages: [
             RemoteMessage(id: "a", role: .you, text: "fix the flaky test"),
             RemoteMessage(id: "b", role: .tool, text: "Run the tests", tool: "Bash", detail: "npm test"),
-        ]),
+        ], place: .latest, more: true),
         .diff(session: session.id, path: "Sources/App.swift", text: "@@ -1,2 +1,2 @@\n-old\n+new\n same"),
     ] {
         #expect(try roundTrip(event) == event)
@@ -122,4 +124,25 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     #expect(sent?["waiting"] as? Int == 2)
     #expect(sent?["sealed"] as? String == "c2VhbGVk")
     #expect(sent?["urgent"] as? Bool == true)
+}
+
+@Test func aConversationPutsMessagesWhereTheHostSays() {
+    let say = { (id: String) in RemoteMessage(id: id, role: .agent, text: id) }
+    var conversation = RemoteConversation()
+    func take(_ ids: [String], at place: RemotePlace, more: Bool = false) -> Bool { conversation.take(ids.map(say), at: place, more: more) }
+    #expect(take(["c", "d"], at: .latest, more: true))
+    #expect(conversation.hasEarlier)
+    #expect(take(["a", "b"], at: .before("c")))
+    #expect(take(["e"], at: .after("d")))
+    #expect(conversation.messages.map(\.id) == ["a", "b", "c", "d", "e"])
+    #expect(!conversation.hasEarlier)
+
+    // A page or new messages that no longer fit, as after a rewind, change nothing.
+    #expect(!take(["x"], at: .after("d")))
+    #expect(!take(["x"], at: .before("b")))
+    #expect(conversation.messages.map(\.id) == ["a", "b", "c", "d", "e"])
+
+    // A rewind on the host sends the latest page instead of everything.
+    #expect(take(["a", "f"], at: .latest))
+    #expect(conversation.messages.map(\.id) == ["a", "f"])
 }
