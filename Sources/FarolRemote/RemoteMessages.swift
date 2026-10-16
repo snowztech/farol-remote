@@ -246,9 +246,6 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         case open(project: String, agent: String?)
         /// Closes a session, as its tab's close button on the host. A host keeps its last session open, and says so.
         case close(session: UUID)
-        /// Scrolls a session as the mouse wheel would, by lines. Positive goes back. A full-screen agent like Claude Code keeps
-        /// its earlier output itself, out of the terminal's own history, and scrolls its own view back to show it.
-        case scroll(session: UUID, by: Int)
         /// The files changed in a session's repository, as the host's review panel compares them.
         case changes(session: UUID)
         /// One of those files, as a unified diff.

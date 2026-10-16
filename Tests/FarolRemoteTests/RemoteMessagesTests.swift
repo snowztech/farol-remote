@@ -19,7 +19,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
         .open(project: "/Users/me/shelf", agent: "claude"), .open(project: "/Users/me/shelf", agent: nil),
         .close(session: session), .key(session: session, key: .shiftTab),
         .conversation(session: session, before: nil), .conversation(session: session, before: "a1b2.0"),
-        .scroll(session: session, by: 20), .scroll(session: session, by: -20), .changes(session: session), .diff(session: session, path: "Sources/App.swift"),
+        .changes(session: session), .diff(session: session, path: "Sources/App.swift"),
         .answer(session: session, request: "toolu_01", choice: 2),
         .terminal(session: session, open: true), .control(session: session, key: "d"),
     ] {
