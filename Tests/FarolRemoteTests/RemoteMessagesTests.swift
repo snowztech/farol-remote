@@ -129,19 +129,20 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
 @Test func aConversationPutsMessagesWhereTheHostSays() {
     let say = { (id: String) in RemoteMessage(id: id, role: .agent, text: id) }
     var conversation = RemoteConversation()
-    #expect(conversation.take([say("c"), say("d")], at: .latest, more: true))
+    func take(_ ids: [String], at place: RemotePlace, more: Bool = false) -> Bool { conversation.take(ids.map(say), at: place, more: more) }
+    #expect(take(["c", "d"], at: .latest, more: true))
     #expect(conversation.hasEarlier)
-    #expect(conversation.take([say("a"), say("b")], at: .before("c"), more: false))
-    #expect(conversation.take([say("e")], at: .after("d"), more: false))
+    #expect(take(["a", "b"], at: .before("c")))
+    #expect(take(["e"], at: .after("d")))
     #expect(conversation.messages.map(\.id) == ["a", "b", "c", "d", "e"])
     #expect(!conversation.hasEarlier)
 
     // A page or new messages that no longer fit, as after a rewind, change nothing.
-    #expect(!conversation.take([say("x")], at: .after("d"), more: false))
-    #expect(!conversation.take([say("x")], at: .before("b"), more: false))
+    #expect(!take(["x"], at: .after("d")))
+    #expect(!take(["x"], at: .before("b")))
     #expect(conversation.messages.map(\.id) == ["a", "b", "c", "d", "e"])
 
     // A rewind on the host sends the latest page instead of everything.
-    #expect(conversation.take([say("a"), say("f")], at: .latest, more: false))
+    #expect(take(["a", "f"], at: .latest))
     #expect(conversation.messages.map(\.id) == ["a", "f"])
 }
