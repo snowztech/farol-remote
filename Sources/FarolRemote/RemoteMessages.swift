@@ -42,6 +42,16 @@ public struct RemoteSession: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+/// Where messages of a conversation go on the phone.
+public enum RemotePlace: Codable, Equatable, Sendable {
+    /// Instead of everything shown: the latest page, or the whole of a new branch after you rewound the conversation.
+    case latest
+    /// Before the message with this id, a page further back.
+    case before(String)
+    /// After the message with this id, which the agent just wrote.
+    case after(String)
+}
+
 /// One step of an agent's conversation, as its log records it.
 public struct RemoteMessage: Codable, Equatable, Identifiable, Sendable {
     public enum Role: String, Codable, Sendable {
@@ -185,8 +195,8 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         case diff(session: UUID, path: String)
         /// The conversation of the agent in a session, read from the agent's own log rather than its screen.
         /// Nil asks for the latest messages, and the host then sends new ones as they come while the session is watched.
-        /// A number asks for the page that ends just before that message, to read further back.
-        case conversation(session: UUID, before: Int?)
+        /// A message's id asks for the page just before it, to read further back.
+        case conversation(session: UUID, before: String?)
     }
 
     public init(id: UUID = UUID(), _ action: Action) {
@@ -209,8 +219,8 @@ public enum RemoteEvent: Codable, Equatable, Sendable {
     case opened(command: UUID, session: UUID)
     /// Answers `changes`. `scope` says what they are compared with, like "Uncommitted" or "Since main".
     case changes(session: UUID, scope: String, files: [RemoteChange])
-    /// Messages of a session's conversation, from message `from` on, out of `total` so far. Pages and new messages both come this way.
-    case conversation(session: UUID, from: Int, total: Int, messages: [RemoteMessage])
+    /// Messages of a session's conversation, and where they go. `more` says there are earlier ones to ask for.
+    case conversation(session: UUID, messages: [RemoteMessage], place: RemotePlace, more: Bool)
     /// Answers `diff`: the file as a unified diff, `@@` headers and `+`, `-` and ` ` lines, cut short if very long.
     case diff(session: UUID, path: String, text: String)
     case refused(command: UUID, reason: String)

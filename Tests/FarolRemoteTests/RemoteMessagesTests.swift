@@ -18,7 +18,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
         .activity(token: Data([0xAB, 0x02]), sandbox: true),
         .open(project: "/Users/me/shelf", agent: "claude"), .open(project: "/Users/me/shelf", agent: nil),
         .close(session: session), .key(session: session, key: .shiftTab),
-        .conversation(session: session, before: nil), .conversation(session: session, before: 40),
+        .conversation(session: session, before: nil), .conversation(session: session, before: "a1b2.0"),
         .scroll(session: session, by: 20), .scroll(session: session, by: -20), .changes(session: session), .diff(session: session, path: "Sources/App.swift"),
     ] {
         let command = RemoteCommand(action)
@@ -40,10 +40,12 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
             RemoteChange(path: "icon.png", status: .added, added: 0, removed: 0, binary: true),
         ]),
         .changes(session: session.id, scope: "Since main", files: []),
-        .conversation(session: session.id, from: 0, total: 2, messages: [
+        .conversation(session: session.id, messages: [], place: .after("x"), more: false),
+        .conversation(session: session.id, messages: [RemoteMessage(id: "c", role: .agent, text: "Done.")], place: .before("d"), more: true),
+        .conversation(session: session.id, messages: [
             RemoteMessage(id: "a", role: .you, text: "fix the flaky test"),
             RemoteMessage(id: "b", role: .tool, text: "Run the tests", tool: "Bash", detail: "npm test"),
-        ]),
+        ], place: .latest, more: true),
         .diff(session: session.id, path: "Sources/App.swift", text: "@@ -1,2 +1,2 @@\n-old\n+new\n same"),
     ] {
         #expect(try roundTrip(event) == event)
