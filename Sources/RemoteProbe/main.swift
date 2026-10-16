@@ -76,6 +76,9 @@ final class Probe {
             print("# changes, \(scope)")
             files.forEach { print("  +\($0.added) -\($0.removed)  \($0.status.rawValue)  \($0.path)") }
         case .event(.diff(_, let path, let text)): print("# diff \(path)\n\(text)\n# end")
+        case .event(.conversation(_, let from, let total, let messages)):
+            print("# conversation \(from)..<\(from + messages.count) of \(total)")
+            messages.forEach { print("  \($0.role.rawValue): \($0.tool.map { "[\($0)] " } ?? "")\($0.text.prefix(80))") }
         case .event(.refused(_, let why)): print("! refused: \(why)")
         case .refused(let why): print("! \(why)")
         case .close: print("! connection closed")

@@ -42,6 +42,35 @@ public struct RemoteSession: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+/// One step of an agent's conversation, as its log records it.
+public struct RemoteMessage: Codable, Equatable, Identifiable, Sendable {
+    public enum Role: String, Codable, Sendable {
+        /// What you wrote.
+        case you
+        /// What the agent answered, in Markdown.
+        case agent
+        /// A tool the agent ran, like a command, a read or an edit.
+        case tool
+    }
+
+    public var id: String
+    public var role: Role
+    /// Your words, the agent's Markdown, or a tool's one line, like "Run the tests" or "Farol/SessionView.swift".
+    public var text: String
+    /// The tool's name, like "Bash", "Read" or "Edit".
+    public var tool: String?
+    /// What a tool did in full: a command, or an edit as a unified diff.
+    public var detail: String?
+
+    public init(id: String, role: Role, text: String, tool: String? = nil, detail: String? = nil) {
+        self.id = id
+        self.role = role
+        self.text = text
+        self.tool = tool
+        self.detail = detail
+    }
+}
+
 /// A file changed in a session's repository.
 public struct RemoteChange: Codable, Equatable, Identifiable, Sendable {
     public enum Status: String, Codable, Sendable {
@@ -154,6 +183,10 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         case changes(session: UUID)
         /// One of those files, as a unified diff.
         case diff(session: UUID, path: String)
+        /// The conversation of the agent in a session, read from the agent's own log rather than its screen.
+        /// Nil asks for the latest messages, and the host then sends new ones as they come while the session is watched.
+        /// A number asks for the page that ends just before that message, to read further back.
+        case conversation(session: UUID, before: Int?)
     }
 
     public init(id: UUID = UUID(), _ action: Action) {
@@ -176,6 +209,8 @@ public enum RemoteEvent: Codable, Equatable, Sendable {
     case opened(command: UUID, session: UUID)
     /// Answers `changes`. `scope` says what they are compared with, like "Uncommitted" or "Since main".
     case changes(session: UUID, scope: String, files: [RemoteChange])
+    /// Messages of a session's conversation, from message `from` on, out of `total` so far. Pages and new messages both come this way.
+    case conversation(session: UUID, from: Int, total: Int, messages: [RemoteMessage])
     /// Answers `diff`: the file as a unified diff, `@@` headers and `+`, `-` and ` ` lines, cut short if very long.
     case diff(session: UUID, path: String, text: String)
     case refused(command: UUID, reason: String)
