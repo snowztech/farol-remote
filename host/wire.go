@@ -154,6 +154,13 @@ type command struct {
 		Close *struct {
 			Session string `json:"session"`
 		} `json:"close"`
+		Changes *struct {
+			Session string `json:"session"`
+		} `json:"changes"`
+		Diff *struct {
+			Session string `json:"session"`
+			Path    string `json:"path"`
+		} `json:"diff"`
 	} `json:"action"`
 }
 
@@ -182,7 +189,7 @@ func event(name string, body any) []byte {
 }
 
 // What this host can do beyond screens and typing, by the names RemoteFeature gives them.
-var features = []string{"conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions"}
+var features = []string{"conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions", "changes"}
 
 // helloEvent says the version this host speaks, what to call it, and what it can do.
 func helloEvent(name string) []byte {
@@ -251,6 +258,18 @@ func optionsEvent(projects, agents []choice) []byte {
 // openedEvent answers `open` with the session it made, so the phone goes straight to it.
 func openedEvent(command, session string) []byte {
 	return event("opened", map[string]string{"command": command, "session": session})
+}
+
+// changesEvent lists the changed files, and what they are compared with, like "Uncommitted" or "Since main".
+func changesEvent(session, scope string, files []change) []byte {
+	if files == nil {
+		files = []change{}
+	}
+	return event("changes", map[string]any{"session": session, "scope": scope, "files": files})
+}
+
+func diffEvent(session, path, text string) []byte {
+	return event("diff", map[string]string{"session": session, "path": path, "text": text})
 }
 
 func doneEvent(command string) []byte {

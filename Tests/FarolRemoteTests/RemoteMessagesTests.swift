@@ -184,10 +184,20 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
 
 @Test func farolHostsHelloReadsAsAHostThatDoesWhatAMacDoesForAgents() throws {
     // What `farol-host` writes, as its host/swift_test.go checks.
-    let hello = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1,"features":["conversation","requests","commands","attachments","terminal","notifications","sessions"],"name":"host"}}"#.utf8))
-    #expect(hello == .hello(version: 1, features: ["conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions"], name: "host"))
-    // Everything a Mac does for agents. The changes view is a Mac's alone for now.
-    #expect(RemoteFeature.of(["conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions"]) == [.conversation, .requests, .commands, .attachments, .terminal, .notifications, .sessions])
+    let hello = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1,"features":["conversation","requests","commands","attachments","terminal","notifications","sessions","changes"],"name":"host"}}"#.utf8))
+    #expect(hello == .hello(version: 1, features: ["conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions", "changes"], name: "host"))
+    // Everything a Mac does.
+    #expect(RemoteFeature.of(["conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions", "changes"]) == Set(RemoteFeature.allCases))
+}
+
+@Test func farolHostsChangesRead() throws {
+    let session = try #require(UUID(uuidString: "11111111-2222-3333-4444-555555555555"))
+    let decode = { (text: String) in try JSONDecoder().decode(RemoteEvent.self, from: Data(text.utf8)) }
+    let changes = try decode(#"{"changes":{"session":"11111111-2222-3333-4444-555555555555","scope":"Since main","files":[{"path":"a.txt","status":"modified","added":2,"removed":1,"binary":false},{"path":"new name.txt","oldPath":"old name.txt","status":"renamed","added":0,"removed":0,"binary":false}]}}"#)
+    #expect(changes == .changes(session: session, scope: "Since main", files: [RemoteChange(path: "a.txt", status: .modified, added: 2, removed: 1),
+                                                                             RemoteChange(path: "new name.txt", oldPath: "old name.txt", status: .renamed, added: 0, removed: 0)]))
+    let diff = try decode(#"{"diff":{"session":"11111111-2222-3333-4444-555555555555","path":"a.txt","text":"@@ -1 +1 @@\n-a\n+b\n"}}"#)
+    #expect(diff == .diff(session: session, path: "a.txt", text: "@@ -1 +1 @@\n-a\n+b\n"))
 }
 
 @Test func farolHostsLiveActivityOpensOnThePhone() throws {

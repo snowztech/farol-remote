@@ -238,6 +238,10 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 		h.open(id, p, c.ID, a.Open.Project, a.Open.Agent)
 	case a.Close != nil:
 		h.close(id, p, c.ID, a.Close.Session)
+	case a.Changes != nil:
+		h.changes(id, p, c.ID, a.Changes.Session)
+	case a.Diff != nil:
+		h.diff(id, p, c.ID, a.Diff.Session, a.Diff.Path)
 	case a.Task != nil:
 		h.tell(id, p, refusedEvent(c.ID, "This machine cannot start tasks from the phone yet."))
 	case c.ID != "":
