@@ -333,6 +333,9 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         /// One part of a picture, `part` counting from 0 of `parts`. The host answers each one before the next goes, with `done`,
         /// and the last with `attached`. Sent again after a dropped connection, a part already taken is taken once.
         case attach(session: UUID, attachment: UUID, part: Int, parts: Int, data: Data)
+        /// The phone forgets this host. The host stops letting it in, notifying it and updating its Live Activity, until its code is scanned again.
+        /// A host that does not know it refuses it, and the phone forgets it all the same.
+        case forget
     }
 
     public init(id: UUID = UUID(), _ action: Action) {

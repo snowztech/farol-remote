@@ -1,0 +1,49 @@
+{
+  "commands" : [
+    "{\"action\":{\"hello\":{\"version\":1}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"watch\":{\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"send\":{\"session\":\"11111111-2222-3333-4444-555555555555\",\"text\":\"go on\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"key\":{\"key\":\"enter\",\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"type\":{\"session\":\"11111111-2222-3333-4444-555555555555\",\"text\":\"\\/\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"notify\":{\"key\":\"Ag==\",\"notices\":[\"waiting\"],\"sandbox\":true,\"starts\":\"Aw==\",\"token\":\"AQ==\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"activity\":{\"sandbox\":false,\"token\":\"BA==\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"history\":{\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"options\":{}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"task\":{\"agent\":\"a\",\"project\":\"p\",\"text\":\"t\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"open\":{\"agent\":\"claude\",\"project\":\"\\/home\\/me\\/shelf\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"close\":{\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"changes\":{\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"diff\":{\"path\":\"b.go\",\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"conversation\":{\"before\":\"a1.0\",\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"answer\":{\"choice\":2,\"request\":\"toolu_01\",\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"terminal\":{\"open\":true,\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"control\":{\"key\":\"d\",\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"commands\":{\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"attach\":{\"attachment\":\"99999999-8888-7777-6666-555555555555\",\"data\":\"\\/w==\",\"part\":0,\"parts\":1,\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"forget\":{}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}"
+  ],
+  "events" : [
+    "{\"options\":{\"agent\":\"claude\",\"agents\":[{\"id\":\"claude\",\"name\":\"Claude Code\"}],\"projects\":[{\"id\":\"\\/home\\/me\\/shelf\",\"name\":\"shelf\"}]}}",
+    "{\"opened\":{\"command\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\",\"session\":\"11111111-2222-3333-4444-555555555555\"}}",
+    "{\"changes\":{\"files\":[{\"added\":1,\"binary\":false,\"oldPath\":\"a.go\",\"path\":\"b.go\",\"removed\":2,\"status\":\"renamed\"},{\"added\":0,\"binary\":true,\"path\":\"logo.png\",\"removed\":0,\"status\":\"added\"}],\"scope\":\"Uncommitted\",\"session\":\"11111111-2222-3333-4444-555555555555\"}}",
+    "{\"conversation\":{\"messages\":[{\"id\":\"a1.0\",\"role\":\"agent\",\"text\":\"Done.\"},{\"detail\":\"npm test\",\"id\":\"a2.0\",\"role\":\"tool\",\"text\":\"npm test\",\"tool\":\"Bash\"}],\"more\":false,\"place\":{\"after\":{\"_0\":\"u1.0\"}},\"session\":\"11111111-2222-3333-4444-555555555555\"}}",
+    "{\"conversation\":{\"messages\":[],\"more\":true,\"place\":{\"latest\":{}},\"session\":\"11111111-2222-3333-4444-555555555555\"}}",
+    "{\"diff\":{\"path\":\"b.go\",\"session\":\"11111111-2222-3333-4444-555555555555\",\"text\":\"@@ -1 +1 @@\\n-a\\n+b\\n\"}}",
+    "{\"request\":{\"request\":{\"choices\":[{\"detail\":\"the order test\",\"label\":\"store\"},{\"label\":\"all\"}],\"id\":\"toolu_01\",\"title\":\"Which test?\"},\"session\":\"11111111-2222-3333-4444-555555555555\"}}",
+    "{\"request\":{\"session\":\"11111111-2222-3333-4444-555555555555\"}}",
+    "{\"attached\":{\"attachment\":\"99999999-8888-7777-6666-555555555555\",\"command\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\",\"path\":\"\\/home\\/me\\/.cache\\/Farol\\/Attachments\\/a.png\"}}",
+    "{\"commands\":{\"commands\":[{\"detail\":\"Start over\",\"mention\":false,\"menu\":false,\"name\":\"clear\"},{\"mention\":true,\"menu\":true,\"name\":\"deploy\"}],\"session\":\"11111111-2222-3333-4444-555555555555\"}}"
+  ],
+  "keys" : [
+    "enter",
+    "escape",
+    "tab",
+    "up",
+    "down",
+    "left",
+    "right",
+    "backspace",
+    "shiftTab",
+    "interrupt"
+  ]
+}

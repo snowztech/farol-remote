@@ -92,7 +92,9 @@ var sealedText = regexp.MustCompile(`^[A-Za-z0-9+/=]*$`)
 var deviceToken = regexp.MustCompile(`^[0-9a-f]{64,200}$`)
 
 // send asks Apple to show one notification. What a Mac sent is checked first, since anyone can connect as a Mac.
-func (p *pusher) send(ctx context.Context, asked []byte) error {
+// send has Apple deliver what a Mac asked for. room is the Mac's, which a Live Activity it starts carries,
+// so the phone shows one for each of its Macs and servers, and knows whose it is.
+func (p *pusher) send(ctx context.Context, asked []byte, room string) error {
 	var request pushRequest
 	if err := json.Unmarshal(asked, &request); err != nil {
 		return err
@@ -125,7 +127,7 @@ func (p *pusher) send(ctx context.Context, asked []byte) error {
 			if request.Waiting > 0 {
 				words = notices["waiting"]
 			}
-			aps["attributes-type"], aps["attributes"] = "SessionsActivity", map[string]any{}
+			aps["attributes-type"], aps["attributes"] = "SessionsActivity", map[string]any{"host": room}
 			aps["alert"] = map[string]string{"title": "Farol", "body": words}
 		}
 		payload["aps"], kind, topic = aps, "liveactivity", p.topic+".push-type.liveactivity"

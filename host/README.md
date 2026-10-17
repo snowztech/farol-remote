@@ -44,7 +44,7 @@ A phone knows several Macs and servers at once. Scanning a server's code adds it
 | `farol-host run` | Lets paired phones in, for as long as it runs. What the service runs for you. |
 | `farol-host pair` | Shows a code to pair another phone. `farol-host` has to be running. |
 | `farol-host devices` | Lists the phones this machine lets in. |
-| `farol-host forget <name>` | Stops letting a phone in. One that is connected is cut off at once. |
+| `farol-host forget <name>` | Stops letting a phone in, notifying it and updating its Live Activity. One that is connected is cut off at once. A phone that forgets this machine in Farol tells it the same. |
 | `farol-host status <word>` | Says what the agent in this session is doing. The hooks `setup` adds call it. |
 | `farol-host version` | Says which release this is. So do `--version` and `-v`. |
 
@@ -93,7 +93,7 @@ Scan the code it shows, then leave with `Ctrl-b d`.
 | `store.go` | The key, the paired phones and the code on screen |
 | `install.sh` | What `farol.sh/host.sh` runs: it downloads a release and checks it |
 
-`testdata/swift.json` was written by the Swift package, from two keys made for the tests. The tests open it to prove a real phone and this CLI understand each other.
+`testdata/swift.json` was written by the Swift package, from two keys made for the tests. The tests open it to prove a real phone and this CLI understand each other. `testdata/wire.json` holds one of each command, event and key a phone knows. The Swift package's `WireTests` keep it current: run `FAROL_WRITE_WIRE=1 swift test` after a message changes.
 
 ```sh
 go test -race ./...

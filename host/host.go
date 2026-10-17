@@ -231,6 +231,10 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 	case a.Type != nil:
 		h.act(id, p, c.ID, func() bool { return h.terminal.keys(a.Type.Session, a.Type.Text) })
 	case a.Key != nil:
+		if _, known := tmuxKeys[a.Key.Key]; !known {
+			h.tell(id, p, refusedEvent(c.ID, "This machine does not know that key. Update farol-host on it."))
+			return
+		}
 		h.act(id, p, c.ID, func() bool { return h.press(a.Key.Session, a.Key.Key) })
 	case a.Options != nil:
 		h.options(id, p)
@@ -242,6 +246,14 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 		h.changes(id, p, c.ID, a.Changes.Session)
 	case a.Diff != nil:
 		h.diff(id, p, c.ID, a.Diff.Session, a.Diff.Path)
+	case a.Forget != nil:
+		if err := h.store.forget(p.device.Key); err != nil {
+			log.Printf("%q could not be forgotten: %v", p.device.Name, err)
+			h.tell(id, p, refusedEvent(c.ID, "This machine could not forget this phone. Run farol-host forget on it."))
+			return
+		}
+		h.tell(id, p, doneEvent(c.ID))
+		delete(h.phones, id)
 	case a.Task != nil:
 		h.tell(id, p, refusedEvent(c.ID, "This machine cannot start tasks from the phone yet."))
 	case c.ID != "":
@@ -383,6 +395,11 @@ func (h *host) tell(id uint32, p *phone, event []byte) {
 
 func (h *host) write(id uint32, frame wireFrame) {
 	payload, _ := json.Marshal(frame)
+	// The relay ends a connection that sends it more, which would cut off every phone over one message.
+	if len(toPhone(id, nil))+len(payload) > maxMessage {
+		log.Printf("a message of %d bytes was left unsent, over the relay's limit", len(payload))
+		return
+	}
 	h.send(toPhone(id, payload))
 }
 
