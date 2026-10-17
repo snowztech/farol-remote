@@ -31,11 +31,11 @@ func (f *fakeTerminal) screen(id string) (string, bool) {
 
 func (f *fakeTerminal) history(id string) (string, bool) { return "earlier", id == fakeSession }
 
-func (f *fakeTerminal) agentIn(id string) agentState {
+func (f *fakeTerminal) agentIn(id string) (agentState, bool) {
 	if id != fakeSession {
-		return agentState{}
+		return agentState{}, false
 	}
-	return f.agent
+	return f.agent, true
 }
 
 func (f *fakeTerminal) answered(id string) { f.agent.request = nil }
@@ -460,5 +460,35 @@ func TestAnAgentThatMovedOnTakesNoAnswer(t *testing.T) {
 	same(t, b.ask("a", answer(fakeSession, "toolu_1", 1)), refusedEvent("a", "That was already answered."))
 	if len(b.terminal.typed) != 0 {
 		t.Fatalf("typed %v", b.terminal.typed)
+	}
+}
+
+func TestAPhoneAsksWhatTheAgentTakesAfterASlash(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	told := b.ask("c", fmt.Sprintf(`{"commands":{"session":%q}}`, fakeSession))
+	if len(told) != 1 || !strings.Contains(told[0], `"name":"compact"`) {
+		t.Fatalf("told %v", told)
+	}
+	same(t, b.ask("gone", `{"commands":{"session":"00000000-0000-0000-0000-000000000000"}}`), refusedEvent("gone", "That session is closed."))
+}
+
+func TestAPictureArrivesInPartsAndItsPathGoesBack(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.host.pictures = testInbox(t)
+	part := func(id string, n int, data []byte) []string {
+		encoded, _ := json.Marshal(data)
+		return b.ask(id, fmt.Sprintf(`{"attach":{"session":%q,"attachment":%q,"part":%d,"parts":2,"data":%s}}`, fakeSession, picture, n, encoded))
+	}
+	same(t, part("p0", 0, png[:4]), doneEvent("p0"))
+	told := part("p1", 1, png[4:])
+	same(t, told, attachedEvent("p1", picture, filepath.Join(b.host.pictures.folder, picture+".png")))
+}
+
+func TestReturnWaitsForTheAgentToOpenAPicture(t *testing.T) {
+	reply := "/home/me/.cache/Farol/Attachments/" + picture + ".png\nwhat is off here?"
+	if returnDelay(reply, 0) < returnDelay("one\ntwo", 0)+500*time.Millisecond {
+		t.Fatal("a picture gives the agent no more time")
 	}
 }

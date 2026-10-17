@@ -29,6 +29,8 @@ type host struct {
 	transcripts map[string]*agent.Transcript
 	// The last paste from a phone into each session, until the Return that sends it.
 	pasted map[string]paste
+	// Pictures from phones. Made the first time one comes.
+	pictures *inbox
 }
 
 type paste struct {
@@ -179,6 +181,10 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 		h.conversation(id, p, c.ID, a.Conversation.Session, a.Conversation.Before)
 	case a.Answer != nil:
 		h.answer(id, p, c.ID, a.Answer.Session, a.Answer.Request, a.Answer.Choice)
+	case a.Commands != nil:
+		h.commands(id, p, c.ID, a.Commands.Session)
+	case a.Attach != nil:
+		h.attach(id, p, c.ID, a.Attach.Session, a.Attach.Attachment, a.Attach.Part, a.Attach.Parts, a.Attach.Data)
 	case a.Notify != nil:
 		// Where to notify this phone, which this host does not do yet.
 	case a.History != nil:
@@ -237,11 +243,18 @@ func (h *host) press(session, key string) bool {
 	return true
 }
 
-// returnDelay is how long Return waits after a paste. An agent takes a paste in as a whole, and a Return that comes meanwhile is lost.
-// More lines take longer, up to a few screens' worth.
+// returnDelay is how long Return waits after a paste. An agent takes a paste in as a whole and opens any picture named in it,
+// and a Return that comes meanwhile is lost. More lines take longer, up to a few screens' worth, and a picture much longer.
 func returnDelay(text string, elapsed time.Duration) time.Duration {
-	lines := min(strings.Count(text, "\n")+1, 8)
-	return max(0, 250*time.Millisecond+time.Duration(lines)*150*time.Millisecond-elapsed)
+	lines := strings.Split(text, "\n")
+	pictures := 0
+	for _, line := range lines {
+		if strings.Contains(line, "/Farol/Attachments/") {
+			pictures++
+		}
+	}
+	settle := 250*time.Millisecond + time.Duration(min(len(lines), 8))*150*time.Millisecond + time.Duration(min(pictures, 4))*600*time.Millisecond
+	return max(0, settle-elapsed)
 }
 
 // tick is called a few times a second. It does nothing while no phone is connected.

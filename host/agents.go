@@ -2,8 +2,12 @@ package main
 
 import (
 	"bytes"
+	"errors"
+	"os"
 	"slices"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/snowztech/farol-remote/host/agent"
 )
@@ -18,7 +22,7 @@ type reading struct {
 
 // conversation answers a phone that asks for a session's conversation: the latest page, which it then follows while it watches, or a page further back.
 func (h *host) conversation(id uint32, p *phone, command, session string, before *string) {
-	asked := h.terminal.agentIn(session)
+	asked, _ := h.terminal.agentIn(session)
 	log, started := asked.log, asked.started
 	switch {
 	case log == "" && started && before == nil:
@@ -55,7 +59,7 @@ func (h *host) sendLatest(id uint32, p *phone, messages []agent.Message) {
 // follow sends a phone what the agent in the session it watches wrote since it last heard.
 // The log is known only once a hook names it, and the phone shows the terminal until then, so it gets the conversation as soon as there is one.
 func (h *host) follow(id uint32, p *phone) {
-	asked := h.terminal.agentIn(p.watching)
+	asked, _ := h.terminal.agentIn(p.watching)
 	log, started := asked.log, asked.started
 	switch r := p.reading; {
 	case r != nil && r.session == p.watching && r.log == log:
@@ -132,7 +136,8 @@ func pageStart(messages []agent.Message, end int) int {
 
 // tellRequest tells a phone what the session it watches waits on, when that changed. Nothing is a change too, so the phone stops showing what was asked.
 func (h *host) tellRequest(id uint32, p *phone) {
-	if event := requestEvent(p.watching, h.terminal.agentIn(p.watching).request); !bytes.Equal(event, p.request) {
+	asked, _ := h.terminal.agentIn(p.watching)
+	if event := requestEvent(p.watching, asked.request); !bytes.Equal(event, p.request) {
 		p.request = event
 		h.tell(id, p, event)
 	}
@@ -144,7 +149,7 @@ func (h *host) answer(id uint32, p *phone, command, session, request string, cho
 		h.tell(id, p, doneEvent(command))
 		return
 	}
-	asked := h.terminal.agentIn(session)
+	asked, _ := h.terminal.agentIn(session)
 	if asked.request == nil || asked.request.ID != request || asked.status != "waiting" {
 		h.tell(id, p, refusedEvent(command, "That was already answered."))
 		return
@@ -154,4 +159,43 @@ func (h *host) answer(id uint32, p *phone, command, session, request string, cho
 	h.terminal.keys(session, strconv.Itoa(choice))
 	h.tell(id, p, doneEvent(command))
 	h.refresh()
+}
+
+// commands tells a phone what the agent in a session takes after a slash, from its config folder and the session's project.
+func (h *host) commands(id uint32, p *phone, command, session string) {
+	asked, ok := h.terminal.agentIn(session)
+	if !ok {
+		h.tell(id, p, refusedEvent(command, "That session is closed."))
+		return
+	}
+	project := asked.folder
+	if root, err := run("", "git", "-C", asked.folder, "rev-parse", "--show-toplevel"); err == nil {
+		project = strings.TrimSpace(root)
+	}
+	home, _ := os.UserHomeDir()
+	h.tell(id, p, commandsEvent(session, agent.Commands(asked.log, project, home)))
+}
+
+// attach takes one part of a picture. Each is answered, so the phone sends the next, and the last with where the picture is.
+func (h *host) attach(id uint32, p *phone, command, session, attachment string, part, parts int, data []byte) {
+	if _, ok := h.terminal.agentIn(session); !ok {
+		h.tell(id, p, refusedEvent(command, "That session is closed."))
+		return
+	}
+	if h.pictures == nil {
+		h.pictures = newInbox()
+	}
+	file, err := h.pictures.take(attachment, part, parts, data, time.Now())
+	switch {
+	case errors.Is(err, errNotAnImage):
+		h.tell(id, p, refusedEvent(command, "Only a photo or a screenshot can be attached."))
+	case errors.Is(err, errTooLarge):
+		h.tell(id, p, refusedEvent(command, "That picture is too large to attach."))
+	case err != nil:
+		h.tell(id, p, refusedEvent(command, "This machine could not keep that picture. Attach it again."))
+	case file == "":
+		h.tell(id, p, doneEvent(command))
+	default:
+		h.tell(id, p, attachedEvent(command, attachment, file))
+	}
 }

@@ -20,8 +20,8 @@ type terminal interface {
 	screen(id string) (string, bool)
 	// history is what scrolled off the top, oldest first.
 	history(id string) (string, bool)
-	// agentIn is what the hooks of the agent in the session said of it.
-	agentIn(id string) agentState
+	// agentIn is what the hooks of the agent in the session said of it. False when the session is gone.
+	agentIn(id string) (agentState, bool)
 	// answered forgets what the agent asked, once an answer is on its way, so a second tap is refused rather than typed into what it asks next.
 	answered(id string)
 	// paste puts text in whole and waits for a Return.
@@ -50,6 +50,8 @@ type tmux struct {
 }
 
 type agentState struct {
+	// Where the session's active pane is.
+	folder string
 	status string
 	log    string
 	// An agent runs there, from its start to its end.
@@ -88,7 +90,7 @@ func (t *tmux) sessions() []session {
 		}
 		id := sessionID(t.host, fields[0], fields[1])
 		targets[id] = fields[0] + ":"
-		agents[id] = agentState{status: fields[3], log: fields[4], started: fields[5] != "", request: readRequest(fields[6])}
+		agents[id] = agentState{folder: fields[2], status: fields[3], log: fields[4], started: fields[5] != "", request: readRequest(fields[6])}
 		one := session{ID: id, Name: fields[7], Status: "idle"}
 		if fields[3] != "" {
 			one.Status = fields[3]
@@ -147,10 +149,10 @@ func (t *tmux) screen(id string) (string, bool) { return t.capture(id) }
 
 func (t *tmux) history(id string) (string, bool) { return t.capture(id, "-S", "-", "-E", "-1") }
 
-func (t *tmux) agentIn(id string) agentState {
+func (t *tmux) agentIn(id string) (agentState, bool) {
 	// Looked up as a target is, which reads the sessions again for one made since the last look.
-	t.target(id)
-	return t.agents[strings.ToUpper(id)]
+	_, ok := t.target(id)
+	return t.agents[strings.ToUpper(id)], ok
 }
 
 func (t *tmux) answered(id string) {

@@ -83,7 +83,7 @@ func TestListsReadsAndTypesIntoARealSession(t *testing.T) {
 			t.Fatalf("%s is not a status", step.event)
 		}
 		status := tm.sessions()[0].Status
-		agent := tm.agentIn(id)
+		agent, _ := tm.agentIn(id)
 		request := ""
 		if agent.request != nil {
 			request = agent.request.ID
@@ -94,11 +94,12 @@ func TestListsReadsAndTypesIntoARealSession(t *testing.T) {
 	}
 	setStatus(pane, "waiting", []byte(asks))
 	tm.sessions()
-	if request := tm.agentIn(id).request; request == nil || request.Detail != "rm -rf build\nmake" {
-		t.Fatalf("the request read back as %+v", request)
+	if agent, _ := tm.agentIn(id); agent.request == nil || agent.request.Detail != "rm -rf build\nmake" {
+		t.Fatalf("the request read back as %+v", agent.request)
 	}
 	tm.answered(id)
-	if tm.sessions(); tm.agentIn(id).request != nil {
+	tm.sessions()
+	if agent, _ := tm.agentIn(id); agent.request != nil {
 		t.Fatal("an answered request is still there")
 	}
 	if setStatus(pane, "dancing", nil) {

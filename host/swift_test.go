@@ -184,7 +184,9 @@ func TestWritesEventsAsSwiftReadsThem(t *testing.T) {
 	branch := "main"
 	// What Swift reads, as the Swift package's tests say it does. The recording is from before hosts said what they can do.
 	for wrote, want := range map[string]string{
-		string(helloEvent("host")):           `{"hello":{"version":1,"features":["conversation","requests"],"name":"host"}}`,
+		string(helloEvent("host")): `{"hello":{"version":1,"features":["conversation","requests","commands","attachments"],"name":"host"}}`,
+		string(commandsEvent(sessionID, []agent.Command{{Name: "compact", Detail: "Summarize"}, {Name: "farol", Mention: true}})): `{"commands":{"session":"11111111-2222-3333-4444-555555555555","commands":[{"name":"compact","detail":"Summarize","menu":false,"mention":false},{"name":"farol","menu":false,"mention":true}]}}`,
+		string(attachedEvent(id, picture, "/home/me/.cache/Farol/Attachments/"+picture+".png")):                                   `{"attached":{"command":"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE","attachment":"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE","path":"/home/me/.cache/Farol/Attachments/AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE.png"}}`,
 		string(requestEvent(sessionID, nil)): `{"request":{"session":"11111111-2222-3333-4444-555555555555"}}`,
 		string(requestEvent(sessionID, &agent.Request{ID: "toolu_1", Tool: "Bash", Title: "Run the tests", Detail: "npm test", Choices: []agent.Choice{}})):                                                                          `{"request":{"session":"11111111-2222-3333-4444-555555555555","request":{"id":"toolu_1","tool":"Bash","title":"Run the tests","detail":"npm test","choices":[]}}}`,
 		string(requestEvent(sessionID, &agent.Request{ID: "q", Title: "Which?", Choices: []agent.Choice{{Label: "A", Detail: "first"}, {Label: "B"}}})):                                                                              `{"request":{"session":"11111111-2222-3333-4444-555555555555","request":{"id":"q","title":"Which?","choices":[{"label":"A","detail":"first"},{"label":"B"}]}}}`,

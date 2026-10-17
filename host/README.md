@@ -31,7 +31,7 @@ tmux new -s api -c ~/code/api
 claude
 ```
 
-On the phone, the session opens as the agent's conversation, and the terminal is one tap away. An approval or a question shows with its answers, to pick with a tap. A session with no agent opens as its terminal.
+On the phone, the session opens as the agent's conversation, and the terminal is one tap away. An approval or a question shows with its answers, to pick with a tap. Typing a slash lists the agent's commands and skills, and a photo or a screenshot can go with a reply. A session with no agent opens as its terminal.
 
 A phone knows several Macs and servers at once. Scanning a server's code adds it next to your Mac, and its sessions show in the same list, with the server's name.
 
@@ -63,14 +63,13 @@ Scan the code it shows, then leave with `Ctrl-b d`.
 ## Good to know
 
 - **A relay of your own.** Run `farol-host -relay wss://your.host setup` or set `FAROL_RELAY`. A phone stays with the relay it was paired through. See [relay/README.md](../relay/README.md).
-- **What it keeps.** This machine's key and the phones it paired, in `farol-host` under your config folder, readable by you alone. `FAROL_HOST_DIR` puts them elsewhere.
+- **What it keeps.** This machine's key and the phones it paired, in `farol-host` under your config folder, readable by you alone. `FAROL_HOST_DIR` puts them elsewhere. Pictures from the phone go in `Farol/Attachments` under your cache folder, and are removed after a week.
 - **Updating.** Run the install line again, then `farol-host setup` to restart it on the new version and connect the hooks it now needs. Restart your agents so they read them.
 - **What setup changes.** It adds hooks to `~/.claude/settings.json` and `~/.codex/hooks.json`, keeping a copy of each as `.farol-backup`, and adds a systemd service named `farol-host`.
 - **Removing it.** `systemctl --user disable --now farol-host`, then delete `~/.local/bin/farol-host` and that folder. As root, leave out `--user`.
 
 ## Not done yet
 
-- Slash commands and pictures from the phone.
 - Notifications when an agent waits or finishes.
 - Starting a task from the phone.
 
@@ -81,8 +80,9 @@ Scan the code it shows, then leave with `Ctrl-b d`.
 | `main.go` | The commands, and the connection to the relay |
 | `setup.go` | Connecting the agents' hooks, and the systemd service |
 | `host.go` | What a phone may ask, and what it is told |
-| `agents.go` | The conversation of the agent a phone watches, a page at a time, and answering what it asks |
-| `agent/` | Reading Claude Code's and Codex's logs, and their hooks' input, as Farol on a Mac does |
+| `agents.go` | The conversation of the agent a phone watches, a page at a time, answering what it asks, its commands, and pictures |
+| `attachments.go` | Putting a picture together from its parts, and checking it is one |
+| `agent/` | Reading Claude Code's and Codex's logs, their hooks' input and their commands, as Farol on a Mac does |
 | `tmux.go` | Listing, reading and typing into sessions, and what their agent's hooks said |
 | `secure.go` | Pairing and the encryption, the same as the Swift package |
 | `wire.go` | The messages, written as the Swift package writes them |

@@ -182,10 +182,25 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     #expect(old == .hello(version: 1))
 }
 
-@Test func farolHostsHelloReadsAsAHostThatReadsConversationsAndRequests() throws {
+@Test func farolHostsHelloReadsAsAHostThatDoesWhatAMacDoesForAgents() throws {
     // What `farol-host` writes, as its host/swift_test.go checks.
-    let hello = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1,"features":["conversation","requests"],"name":"host"}}"#.utf8))
-    #expect(hello == .hello(version: 1, features: ["conversation", "requests"], name: "host"))
+    let hello = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1,"features":["conversation","requests","commands","attachments"],"name":"host"}}"#.utf8))
+    #expect(hello == .hello(version: 1, features: ["conversation", "requests", "commands", "attachments"], name: "host"))
+}
+
+@Test func farolHostsCommandsAndPicturesRead() throws {
+    let session = try #require(UUID(uuidString: "11111111-2222-3333-4444-555555555555"))
+    let picture = try #require(UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"))
+    let decode = { (text: String) in try JSONDecoder().decode(RemoteEvent.self, from: Data(text.utf8)) }
+    let commands = try decode(#"{"commands":{"session":"11111111-2222-3333-4444-555555555555","commands":[{"name":"compact","detail":"Summarize","menu":false,"mention":false},{"name":"farol","menu":false,"mention":true}]}}"#)
+    #expect(commands == .commands(session: session, commands: [RemoteAgentCommand(name: "compact", detail: "Summarize"), RemoteAgentCommand(name: "farol", mention: true)]))
+    let path = "/home/me/.cache/Farol/Attachments/AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE.png"
+    let attached = try decode(#"{"attached":{"command":"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE","attachment":"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE","path":"/home/me/.cache/Farol/Attachments/AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE.png"}}"#)
+    #expect(attached == .attached(command: picture, attachment: picture, path: path))
+    // A part as host_test.go sends it: the bytes in base64.
+    let part = try JSONSerialization.jsonObject(with: JSONEncoder().encode(RemoteCommand(.attach(session: session, attachment: picture, part: 1, parts: 2, data: Data([1, 2, 3])))))
+    let action = (part as? [String: Any])?["action"] as? [String: Any]
+    #expect(NSDictionary(dictionary: action ?? [:]) == ["attach": ["session": session.uuidString, "attachment": picture.uuidString, "part": 1, "parts": 2, "data": "AQID"]])
 }
 
 @Test func farolHostsRequestsReadAndItsAnswersGoAsItReadsThem() throws {

@@ -105,6 +105,17 @@ type command struct {
 			Request string `json:"request"`
 			Choice  int    `json:"choice"`
 		} `json:"answer"`
+		Commands *struct {
+			Session string `json:"session"`
+		} `json:"commands"`
+		// One part of a picture, in order.
+		Attach *struct {
+			Session    string `json:"session"`
+			Attachment string `json:"attachment"`
+			Part       int    `json:"part"`
+			Parts      int    `json:"parts"`
+			Data       []byte `json:"data"`
+		} `json:"attach"`
 		// No message to go before asks for the latest page.
 		Conversation *struct {
 			Session string  `json:"session"`
@@ -141,7 +152,7 @@ func event(name string, body any) []byte {
 }
 
 // What this host can do beyond screens and typing, by the names RemoteFeature gives them.
-var features = []string{"conversation", "requests"}
+var features = []string{"conversation", "requests", "commands", "attachments"}
 
 // helloEvent says the version this host speaks, what to call it, and what it can do.
 func helloEvent(name string) []byte {
@@ -184,6 +195,15 @@ func requestEvent(session string, request *agent.Request) []byte {
 		body["request"] = request
 	}
 	return event("request", body)
+}
+
+func commandsEvent(session string, commands []agent.Command) []byte {
+	return event("commands", map[string]any{"session": session, "commands": commands})
+}
+
+// attachedEvent answers the last part of a picture with where it was put, which the phone puts in a reply.
+func attachedEvent(command, attachment, path string) []byte {
+	return event("attached", map[string]string{"command": command, "attachment": attachment, "path": path})
 }
 
 func doneEvent(command string) []byte {
