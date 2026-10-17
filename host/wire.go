@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"time"
+
+	"github.com/snowztech/farol-remote/host/agent"
 )
 
 // Everything here is written the way the Swift package writes it, since a phone reads it with that package.
@@ -97,6 +100,11 @@ type command struct {
 		History *struct {
 			Session string `json:"session"`
 		} `json:"history"`
+		// No message to go before asks for the latest page.
+		Conversation *struct {
+			Session string  `json:"session"`
+			Before  *string `json:"before"`
+		} `json:"conversation"`
 		Notify  *json.RawMessage `json:"notify"`
 		Options *json.RawMessage `json:"options"`
 		Task    *json.RawMessage `json:"task"`
@@ -119,13 +127,20 @@ type session struct {
 // What the host tells the phone. The sessions and the screen are always sent in full, so a phone that missed some has nothing to replay.
 
 func event(name string, body any) []byte {
-	text, _ := json.Marshal(map[string]any{name: body})
-	return text
+	var text bytes.Buffer
+	encoder := json.NewEncoder(&text)
+	// Go would write each < > and & of a screen or a diff in six bytes, which a page of messages cannot spare. Swift writes them as they are.
+	encoder.SetEscapeHTML(false)
+	encoder.Encode(map[string]any{name: body})
+	return bytes.TrimSuffix(text.Bytes(), []byte("\n"))
 }
 
-// helloEvent says the version this host speaks, what to call it, and what it can do beyond screens and typing, which is nothing yet.
+// What this host can do beyond screens and typing, by the names RemoteFeature gives them.
+var features = []string{"conversation"}
+
+// helloEvent says the version this host speaks, what to call it, and what it can do.
 func helloEvent(name string) []byte {
-	return event("hello", map[string]any{"version": protocolVersion, "features": []string{}, "name": name})
+	return event("hello", map[string]any{"version": protocolVersion, "features": features, "name": name})
 }
 
 func sessionsEvent(sessions []session) []byte {
@@ -141,6 +156,20 @@ func screenEvent(session, text string) []byte {
 
 func historyEvent(session, text string) []byte {
 	return event("history", typed{session, text})
+}
+
+// Where messages go in the conversation a phone has: in place of all of it, or before or after one message.
+var latest = map[string]struct{}{"latest": {}}
+
+func placeBefore(id string) any { return map[string]one[string]{"before": {id}} }
+
+func placeAfter(id string) any { return map[string]one[string]{"after": {id}} }
+
+func conversationEvent(session string, messages []agent.Message, place any, more bool) []byte {
+	if messages == nil {
+		messages = []agent.Message{}
+	}
+	return event("conversation", map[string]any{"session": session, "messages": messages, "place": place, "more": more})
 }
 
 func doneEvent(command string) []byte {

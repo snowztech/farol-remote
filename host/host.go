@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/snowztech/farol-remote/host/agent"
 )
 
 // A host is this machine as a paired phone sees it: the part a Mac running Farol plays, with tmux in place of the app.
@@ -23,6 +25,15 @@ type host struct {
 	phones map[uint32]*phone
 	// The commands each device already had carried out, kept across its connections, since a phone sends again on a new one.
 	seen map[string]*seenCommands
+	// The agents' logs, read where they were left.
+	transcripts map[string]*agent.Transcript
+	// The last paste from a phone into each session, until the Return that sends it.
+	pasted map[string]paste
+}
+
+type paste struct {
+	text string
+	at   time.Time
 }
 
 // One phone's connection, by the number the relay gave it.
@@ -37,10 +48,14 @@ type phone struct {
 	// What it was last sent, so only a change is sent again.
 	sessions []byte
 	screen   *string
+	reading  *reading
+	// The session it was told is an empty conversation, an agent started there with no log yet, so it is told once.
+	toldEmpty string
 }
 
 func newHost(key deviceKey, store store, terminal terminal) *host {
-	return &host{key: key, store: store, terminal: terminal, send: func([]byte) {}, phones: map[uint32]*phone{}, seen: map[string]*seenCommands{}}
+	return &host{key: key, store: store, terminal: terminal, send: func([]byte) {}, phones: map[uint32]*phone{}, seen: map[string]*seenCommands{},
+		transcripts: map[string]*agent.Transcript{}, pasted: map[string]paste{}}
 }
 
 // connected is called with each new connection to the relay, which numbers the phones again.
@@ -156,8 +171,10 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 	case !p.greeted:
 		// Nothing is done for a phone before both sides know they speak the same version.
 	case a.Watch != nil:
-		p.watching, p.screen = a.Watch.Session, nil
+		p.watching, p.screen, p.reading, p.toldEmpty = a.Watch.Session, nil, nil, ""
 		h.refresh()
+	case a.Conversation != nil:
+		h.conversation(id, p, c.ID, a.Conversation.Session, a.Conversation.Before)
 	case a.Notify != nil:
 		// Where to notify this phone, which this host does not do yet.
 	case a.History != nil:
@@ -165,11 +182,14 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 			h.tell(id, p, historyEvent(a.History.Session, lastLines(text, maxHistory)))
 		}
 	case a.Send != nil:
-		h.act(id, p, c.ID, func() bool { return h.terminal.paste(a.Send.Session, a.Send.Text) })
+		h.act(id, p, c.ID, func() bool {
+			h.pasted[a.Send.Session] = paste{a.Send.Text, time.Now()}
+			return h.terminal.paste(a.Send.Session, a.Send.Text)
+		})
 	case a.Type != nil:
 		h.act(id, p, c.ID, func() bool { return h.terminal.keys(a.Type.Session, a.Type.Text) })
 	case a.Key != nil:
-		h.act(id, p, c.ID, func() bool { return h.terminal.press(a.Key.Session, a.Key.Key) })
+		h.act(id, p, c.ID, func() bool { return h.press(a.Key.Session, a.Key.Key) })
 	case a.Options != nil || a.Task != nil:
 		h.tell(id, p, refusedEvent(c.ID, "This machine cannot start tasks from the phone yet."))
 	case c.ID != "":
@@ -193,6 +213,28 @@ func (h *host) act(id uint32, p *phone, command string, do func() bool) {
 	h.refresh()
 }
 
+// press presses a key. Return right after a paste waits for the agent to take the paste in, or it is lost and the reply stays unsent.
+func (h *host) press(session, key string) bool {
+	pasted, ok := h.pasted[session]
+	if key != "enter" || !ok {
+		return h.terminal.press(session, key)
+	}
+	delete(h.pasted, session)
+	time.AfterFunc(returnDelay(pasted.text, time.Since(pasted.at)), func() {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		h.terminal.press(session, key)
+	})
+	return true
+}
+
+// returnDelay is how long Return waits after a paste. An agent takes a paste in as a whole, and a Return that comes meanwhile is lost.
+// More lines take longer, up to a few screens' worth.
+func returnDelay(text string, elapsed time.Duration) time.Duration {
+	lines := min(strings.Count(text, "\n")+1, 8)
+	return max(0, 250*time.Millisecond+time.Duration(lines)*150*time.Millisecond-elapsed)
+}
+
 // tick is called a few times a second. It does nothing while no phone is connected.
 func (h *host) tick() {
 	h.mu.Lock()
@@ -210,7 +252,8 @@ func (h *host) tick() {
 	h.refresh()
 }
 
-// refresh sends each phone what changed: the list, and the screen of the session it has open. Always in full.
+// refresh sends each phone what changed: the list, and the conversation and screen of the session it has open.
+// The list and the screen go in full, so a phone that missed one has nothing to replay.
 func (h *host) refresh() {
 	var list []byte
 	for id, p := range h.phones {
@@ -227,6 +270,7 @@ func (h *host) refresh() {
 		if p.watching == "" {
 			continue
 		}
+		h.follow(id, p)
 		text, ok := h.terminal.screen(p.watching)
 		if !ok || (p.screen != nil && *p.screen == text) {
 			continue

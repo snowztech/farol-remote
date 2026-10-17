@@ -60,15 +60,31 @@ func TestListsReadsAndTypesIntoARealSession(t *testing.T) {
 
 	pane, _ := run("", "tmux", "list-panes", "-t", "demo", "-F", "#{pane_id}")
 	pane = strings.TrimSpace(pane)
-	for _, step := range [][2]string{{"waiting", "waiting"}, {"subagent-stop", "waiting"}, {"done", "done"}, {"clear", "idle"}} {
-		if !setStatus(pane, step[0]) {
-			t.Fatalf("%s is not a status", step[0])
+	// What each hook says, the log it names, and what the session then shows.
+	for _, step := range []struct {
+		event, log, status, conversation string
+		started                          bool
+	}{
+		{"start", "", "idle", "", true},
+		{"working", "/logs/a b.jsonl", "working", "/logs/a b.jsonl", true},
+		{"waiting", "", "waiting", "/logs/a b.jsonl", true},
+		{"subagent-stop", "", "waiting", "/logs/a b.jsonl", true},
+		{"done", "", "done", "/logs/a b.jsonl", true},
+		// The conversation stays readable after the agent ends.
+		{"clear", "", "idle", "/logs/a b.jsonl", false},
+		// A new agent's is not the one before it.
+		{"start", "", "idle", "", true},
+	} {
+		if !setStatus(pane, step.event, step.log) {
+			t.Fatalf("%s is not a status", step.event)
 		}
-		if got := tm.sessions()[0].Status; got != step[1] {
-			t.Fatalf("after %s the session is %s", step[0], got)
+		status := tm.sessions()[0].Status
+		log, started := tm.conversation(id)
+		if status != step.status || log != step.conversation || started != step.started {
+			t.Fatalf("after %s the session is %s, with log %q, started %v", step.event, status, log, started)
 		}
 	}
-	if setStatus(pane, "dancing") {
+	if setStatus(pane, "dancing", "") {
 		t.Fatal("took a status that is not one")
 	}
 }

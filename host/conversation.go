@@ -1,0 +1,126 @@
+package main
+
+import (
+	"slices"
+
+	"github.com/snowztech/farol-remote/host/agent"
+)
+
+// What a phone reads of an agent's conversation, from the log its hooks named. Done as Farol on a Mac does it, in RemoteBridge.
+
+// The conversation a phone reads, and the last message it has, so only what follows is sent.
+type reading struct {
+	session, log, last string
+}
+
+// conversation answers a phone that asks for a session's conversation: the latest page, which it then follows while it watches, or a page further back.
+func (h *host) conversation(id uint32, p *phone, command, session string, before *string) {
+	log, started := h.terminal.conversation(session)
+	switch {
+	case log == "" && started && before == nil:
+		// An agent that has not said anything yet has no log, and its conversation is empty rather than missing.
+		p.toldEmpty = session
+		h.tell(id, p, conversationEvent(session, nil, latest, false))
+	case log == "":
+		h.tell(id, p, refusedEvent(command, "This session has no agent conversation to show."))
+	case before == nil:
+		h.open(id, p, session, log)
+	default:
+		messages := h.messages(log)
+		end := slices.IndexFunc(messages, func(m agent.Message) bool { return m.ID == *before })
+		if end < 0 {
+			h.tell(id, p, refusedEvent(command, "That part of the conversation was rewound."))
+			return
+		}
+		start := pageStart(messages, end)
+		h.tell(id, p, conversationEvent(session, messages[start:end], placeBefore(*before), start > 0))
+	}
+}
+
+func (h *host) open(id uint32, p *phone, session, log string) {
+	p.reading = &reading{session: session, log: log}
+	h.sendLatest(id, p, h.messages(log))
+}
+
+func (h *host) sendLatest(id uint32, p *phone, messages []agent.Message) {
+	start := pageStart(messages, len(messages))
+	p.reading.last = lastID(messages)
+	h.tell(id, p, conversationEvent(p.reading.session, messages[start:], latest, start > 0))
+}
+
+// follow sends a phone what the agent in the session it watches wrote since it last heard.
+// The log is known only once a hook names it, and the phone shows the terminal until then, so it gets the conversation as soon as there is one.
+func (h *host) follow(id uint32, p *phone) {
+	log, started := h.terminal.conversation(p.watching)
+	switch r := p.reading; {
+	case r != nil && r.session == p.watching && r.log == log:
+		messages := h.messages(log)
+		last := lastID(messages)
+		if last == r.last {
+			return
+		}
+		// After a rewind, or more than a page, it gets the latest page instead.
+		if i := slices.IndexFunc(messages, func(m agent.Message) bool { return m.ID == r.last }); r.last != "" && i >= 0 && pageStart(messages, len(messages)) <= i+1 {
+			h.tell(id, p, conversationEvent(r.session, messages[i+1:], placeAfter(r.last), false))
+			r.last = last
+		} else {
+			h.sendLatest(id, p, messages)
+		}
+	case log != "":
+		// The first log named, or a new one: Claude Code starts one after /clear.
+		h.open(id, p, p.watching, log)
+	case started && p.toldEmpty != p.watching:
+		// An agent just started, with nothing said: the phone leaves the terminal for its empty conversation.
+		p.reading, p.toldEmpty = nil, p.watching
+		h.tell(id, p, conversationEvent(p.watching, nil, latest, false))
+	}
+}
+
+// messages reads what the agent added to a log since the last look. A few logs stay read, so opening a session again is quick.
+// ponytail: the first read of a long log holds the host for as long as it takes, a second or so for a very long session. Read it aside if that shows.
+func (h *host) messages(log string) []agent.Message {
+	transcript := h.transcripts[log]
+	if transcript == nil {
+		if len(h.transcripts) >= 8 {
+			h.forgetTranscripts()
+		}
+		transcript = &agent.Transcript{Path: log}
+		h.transcripts[log] = transcript
+	}
+	transcript.Refresh()
+	return transcript.Messages()
+}
+
+// forgetTranscripts keeps only the logs a phone reads now.
+func (h *host) forgetTranscripts() {
+	for log := range h.transcripts {
+		read := false
+		for _, p := range h.phones {
+			read = read || (p.reading != nil && p.reading.log == log)
+		}
+		if !read {
+			delete(h.transcripts, log)
+		}
+	}
+}
+
+func lastID(messages []agent.Message) string {
+	if len(messages) == 0 {
+		return ""
+	}
+	return messages[len(messages)-1].ID
+}
+
+// pageStart is where a page ending at end starts: up to 60 messages, and well under the relay's 256 KB a message.
+func pageStart(messages []agent.Message, end int) int {
+	start, size := end, 0
+	for start > 0 && end-start < 60 {
+		message := messages[start-1]
+		size += len(message.Text) + len(message.Detail) + 100
+		if size > 150_000 && start < end {
+			break
+		}
+		start--
+	}
+	return start
+}

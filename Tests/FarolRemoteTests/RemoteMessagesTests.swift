@@ -182,8 +182,21 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     #expect(old == .hello(version: 1))
 }
 
-@Test func farolHostsHelloReadsAsAHostThatDoesNoMore() throws {
-    // What `farol-host` writes, as in host/testdata/swift.json.
-    let hello = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1,"features":[],"name":"host"}}"#.utf8))
-    #expect(hello == .hello(version: 1, features: [], name: "host"))
+@Test func farolHostsHelloReadsAsAHostThatReadsConversations() throws {
+    // What `farol-host` writes, as its host/swift_test.go checks.
+    let hello = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1,"features":["conversation"],"name":"host"}}"#.utf8))
+    #expect(hello == .hello(version: 1, features: ["conversation"], name: "host"))
+}
+
+@Test func farolHostsConversationReads() throws {
+    let session = try #require(UUID(uuidString: "11111111-2222-3333-4444-555555555555"))
+    let decode = { (text: String) in try JSONDecoder().decode(RemoteEvent.self, from: Data(text.utf8)) }
+    let after = try decode(#"{"conversation":{"session":"11111111-2222-3333-4444-555555555555","messages":[{"id":"a1.0","role":"agent","text":"<b> & co"},{"id":"a2.0","role":"tool","text":"Run the tests","tool":"Bash","detail":"npm test"}],"place":{"after":{"_0":"u1.0"}},"more":false}}"#)
+    #expect(after == .conversation(session: session, messages: [RemoteMessage(id: "a1.0", role: .agent, text: "<b> & co"),
+                                                                RemoteMessage(id: "a2.0", role: .tool, text: "Run the tests", tool: "Bash", detail: "npm test")],
+                                   place: .after("u1.0"), more: false))
+    let latest = try decode(#"{"conversation":{"session":"11111111-2222-3333-4444-555555555555","messages":[],"place":{"latest":{}},"more":true}}"#)
+    #expect(latest == .conversation(session: session, messages: [], place: .latest, more: true))
+    let before = try decode(#"{"conversation":{"session":"11111111-2222-3333-4444-555555555555","messages":[],"place":{"before":{"_0":"x"}},"more":false}}"#)
+    #expect(before == .conversation(session: session, messages: [], place: .before("x"), more: false))
 }

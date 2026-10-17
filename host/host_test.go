@@ -3,14 +3,21 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/snowztech/farol-remote/host/agent"
 )
 
 // fakeTerminal is one session that remembers what was typed into it.
 type fakeTerminal struct {
 	typed []string
+	// What the hooks said of its agent.
+	log     string
+	started bool
 }
 
 const fakeSession = "11111111-2222-3333-4444-555555555555"
@@ -24,6 +31,13 @@ func (f *fakeTerminal) screen(id string) (string, bool) {
 }
 
 func (f *fakeTerminal) history(id string) (string, bool) { return "earlier", id == fakeSession }
+
+func (f *fakeTerminal) conversation(id string) (string, bool) {
+	if id != fakeSession {
+		return "", false
+	}
+	return f.log, f.started
+}
 
 func (f *fakeTerminal) paste(id, text string) bool {
 	if id == fakeSession {
@@ -69,11 +83,26 @@ func newBench(t *testing.T) *bench {
 	return b
 }
 
-// toHost gives the host one frame as phone 1, then has the phone read every answer and reply to it.
+// toHost gives the host one frame as phone 1, then has the phone read the answers.
 func (b *bench) toHost(frame wireFrame) {
 	b.t.Helper()
 	payload, _ := json.Marshal(frame)
 	b.host.receive(toPhone(1, payload))
+	b.read()
+}
+
+// tick has the host look again, as it does a few times a second, and returns what the phone was told.
+func (b *bench) tick() []string {
+	b.t.Helper()
+	before := len(b.events)
+	b.host.tick()
+	b.read()
+	return b.events[before:]
+}
+
+// read has the phone read every answer and reply to it.
+func (b *bench) read() {
+	b.t.Helper()
 	for len(b.inbox) > 0 {
 		message := b.inbox[0]
 		b.inbox = b.inbox[1:]
@@ -213,8 +242,30 @@ func TestWatchingASessionShowsItsScreenAndTypingChangesIt(t *testing.T) {
 	same(t, b.ask("s", send(fakeSession, "yes")), doneEvent("s"), screenEvent(fakeSession, "typed: yes"))
 	b.ask("k", fmt.Sprintf(`{"key":{"session":%q,"key":"enter"}}`, fakeSession))
 	same(t, b.ask("h", fmt.Sprintf(`{"history":{"session":%q}}`, fakeSession)), historyEvent(fakeSession, "earlier"))
-	if got := strings.Join(b.terminal.typed, ","); got != "yes,<enter>" {
+	typed := func() string {
+		b.host.mu.Lock()
+		defer b.host.mu.Unlock()
+		return strings.Join(b.terminal.typed, ",")
+	}
+	// Return after a paste waits for the agent to take it in.
+	if got := typed(); got != "yes" {
 		t.Fatalf("typed %s", got)
+	}
+	time.Sleep(returnDelay("yes", 0) + 100*time.Millisecond)
+	if got := typed(); got != "yes,<enter>" {
+		t.Fatalf("typed %s", got)
+	}
+}
+
+func TestReturnWaitsLongerAfterALongerPaste(t *testing.T) {
+	if returnDelay("fix it", 0) != 400*time.Millisecond || returnDelay("a\nb\nc", 0) <= returnDelay("a", 0) {
+		t.Fatal("the wait does not follow the lines")
+	}
+	if returnDelay(strings.Repeat("line\n", 500), 0) != returnDelay(strings.Repeat("line\n", 7)+"line", 0) {
+		t.Fatal("a whole log waits longer than a few screens")
+	}
+	if returnDelay("a\nb\nc", 5*time.Second) != 0 {
+		t.Fatal("waited after a paste long ago")
 	}
 }
 
@@ -289,4 +340,93 @@ func TestASessionKeepsItsIdAndANewOneGetsAnother(t *testing.T) {
 	if len(first) != 36 || first != strings.ToUpper(first) {
 		t.Fatalf("not an id a phone reads: %s", first)
 	}
+}
+
+// prompt is a line of Claude Code's log where you said something, after the line before it.
+func prompt(id, parent, text string) string {
+	if parent == "" {
+		return fmt.Sprintf(`{"parentUuid":null,"type":"user","uuid":%q,"message":{"role":"user","content":%q}}`+"\n", id, text)
+	}
+	return fmt.Sprintf(`{"parentUuid":%q,"type":"user","uuid":%q,"message":{"role":"user","content":%q}}`+"\n", parent, id, text)
+}
+
+func (b *bench) writeLog(text string) {
+	b.t.Helper()
+	if b.terminal.log == "" {
+		b.terminal.log = filepath.Join(b.t.TempDir(), "log.jsonl")
+	}
+	file, err := os.OpenFile(b.terminal.log, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		b.t.Fatal(err)
+	}
+	defer file.Close()
+	file.WriteString(text)
+}
+
+func conversation(before string) string {
+	if before == "" {
+		return fmt.Sprintf(`{"conversation":{"session":%q}}`, fakeSession)
+	}
+	return fmt.Sprintf(`{"conversation":{"session":%q,"before":%q}}`, fakeSession, before)
+}
+
+func TestAPhoneReadsTheConversationAndThenWhatTheAgentWrites(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.writeLog(prompt("p1", "", "fix the test"))
+	b.ask("w", watch(fakeSession))
+	// Watching shows it at once, since the log is known.
+	first := []agent.Message{{ID: "p1.0", Role: agent.You, Text: "fix the test"}}
+	same(t, b.ask("c", conversation("")), conversationEvent(fakeSession, first, latest, false))
+
+	b.writeLog(prompt("p2", "p1", "and the docs"))
+	same(t, b.tick(), conversationEvent(fakeSession, []agent.Message{{ID: "p2.0", Role: agent.You, Text: "and the docs"}}, placeAfter("p1.0"), false))
+	if told := b.tick(); len(told) != 0 {
+		t.Fatalf("told again %v", told)
+	}
+}
+
+func TestAPhoneWatchingAnAgentThatJustStartedSeesAnEmptyConversationThenItsLog(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.terminal.started = true
+	same(t, b.ask("w", watch(fakeSession)), conversationEvent(fakeSession, nil, latest, false), screenEvent(fakeSession, "typed: "))
+	if told := b.tick(); len(told) != 0 {
+		t.Fatalf("told again %v", told)
+	}
+	b.writeLog(prompt("p1", "", "hello"))
+	same(t, b.tick(), conversationEvent(fakeSession, []agent.Message{{ID: "p1.0", Role: agent.You, Text: "hello"}}, latest, false))
+}
+
+func TestAPhoneAsksForEarlierPages(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	parent := ""
+	for i := range 70 {
+		id := fmt.Sprintf("p%d", i)
+		b.writeLog(prompt(id, parent, id))
+		parent = id
+	}
+	told := b.ask("c", conversation(""))
+	var latestPage struct {
+		Conversation struct {
+			Messages []agent.Message
+			More     bool
+		}
+	}
+	json.Unmarshal([]byte(told[0]), &latestPage)
+	if got := latestPage.Conversation; len(got.Messages) != 60 || !got.More || got.Messages[0].ID != "p10.0" {
+		t.Fatalf("the latest page has %d messages from %s", len(got.Messages), got.Messages[0].ID)
+	}
+	told = b.ask("e", conversation("p10.0"))
+	if !strings.Contains(told[0], `"place":{"before":{"_0":"p10.0"}}`) || !strings.Contains(told[0], `"more":false`) || strings.Count(told[0], `"role"`) != 10 {
+		t.Fatalf("the page before: %s", told[0])
+	}
+	same(t, b.ask("gone", conversation("rewound")), refusedEvent("gone", "That part of the conversation was rewound."))
+}
+
+func TestASessionWithoutAnAgentHasNoConversation(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	same(t, b.ask("c", conversation("")), refusedEvent("c", "This session has no agent conversation to show."))
 }
