@@ -8,7 +8,7 @@ In Farol on your Mac, open Settings → Remote, turn it on and show the code. Op
 
 ## Experimental: an always-on host
 
-The `farol-host` CLI is an early preview for running sessions on your own server. It exposes tmux sessions from that server instead of sessions from Farol on the Mac, and the iPhone app still describes the paired host as a Mac.
+The `farol-host` CLI is an early preview for running sessions on your own server. It exposes the tmux sessions on that server, and the phone lists them by the server's name, next to your Mac's.
 
 With tmux installed on the server:
 
@@ -17,7 +17,7 @@ curl -fsSL https://farol.sh/host.sh | sh
 farol-host setup
 ```
 
-Every tmux session on that machine is then one the phone can open, next to your Mac's sessions. The full steps are in [host/README.md](host/README.md).
+Every tmux session on that machine is then one the phone can open. The full steps are in [host/README.md](host/README.md), and the [Remote docs](https://farol.sh/docs#remote) cover the phone side.
 
 ## Docs
 
