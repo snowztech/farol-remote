@@ -77,7 +77,7 @@ func TestSettingsThatDoNotReadAreLeftAlone(t *testing.T) {
 
 func TestTheServiceRunsTheHostWithTheSamePathAndRelay(t *testing.T) {
 	mine := unit(someHost, "wss://relay.farol.sh", "/usr/bin:/opt/bin", "/home/me", "", false)
-	for _, line := range []string{`ExecStart="/home/me/.local/bin/farol-host"`, `Environment="PATH=/usr/bin:/opt/bin"`,
+	for _, line := range []string{`ExecStart="/home/me/.local/bin/farol-host" run`, `Environment="PATH=/usr/bin:/opt/bin"`,
 		`Environment="FAROL_RELAY=wss://relay.farol.sh"`, "Restart=always", "WantedBy=default.target"} {
 		if !strings.Contains(mine, line) {
 			t.Fatalf("%s is missing from\n%s", line, mine)

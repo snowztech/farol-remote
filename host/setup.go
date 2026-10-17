@@ -171,7 +171,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=%q
+ExecStart=%q run
 Environment=%q
 Environment=%q
 Environment=%q
@@ -233,6 +233,10 @@ func installService(program, relay string) (bool, error) {
 // setup is `farol-host setup`. It is true when the host is now running as a service.
 func setup(relay string) bool {
 	program, err := os.Executable()
+	if err == nil {
+		// Run as fh, it is the link. The hooks and the service name farol-host, which is how a later setup finds them.
+		program, err = filepath.EvalSymlinks(program)
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
