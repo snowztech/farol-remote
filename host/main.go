@@ -22,9 +22,10 @@ import (
 const usage = `usage: farol-host [-relay wss://your.relay] [command]
 
 The Farol Remote CLI, for a machine that stays on. It lets a paired phone see and type into every tmux session here.
+fh is a shorter name for it.
 
   setup           Make this machine ready: connect your agents, keep farol-host running, pair a phone.
-  (no command)    Let paired phones in. Shows a code when no phone is paired yet.
+  run             Let paired phones in, for as long as it runs. The service setup adds runs it for you.
   pair            Show a code to scan from Farol on a phone. farol-host has to be running.
   devices         List the phones this machine lets in.
   forget <name>   Stop letting a phone in.
@@ -77,22 +78,26 @@ func main() {
 
 	switch flag.Arg(0) {
 	case "":
-		if _, err := exec.LookPath("tmux"); err != nil {
-			log.Fatal("tmux is not installed, and it is what runs the sessions")
+		// ponytail: services set up before `run` existed start farol-host with no command and no terminal. Drop once they are all rewritten by setup.
+		if info, err := os.Stdout.Stat(); err != nil || info.Mode()&os.ModeCharDevice == 0 {
+			letPhonesIn(store, *relay, key)
+			return
 		}
-		// Two hosts with one key would keep taking the relay's connection from each other.
-		if !store.lock() {
-			log.Fatal("farol-host is already running on this machine")
+		fmt.Print(usage, "\n")
+		running := "farol-host is running."
+		if store.lock() {
+			running = "farol-host is not running. setup starts it, and keeps it running."
 		}
-		if len(store.devices()) == 0 {
-			showCode(store, *relay, key)
-		}
-		// First in the log, so a report that quotes the log says which release it was.
-		log.Printf("farol-host %s", version)
-		serve(newHost(key, store, newTmux(key.public)), *relay+"/v1/rooms/"+room(key.public)+"/mac")
+		fmt.Println(running, paired(store.devices()))
+	case "run":
+		letPhonesIn(store, *relay, key)
 	case "setup":
-		if setup(*relay) && len(store.devices()) == 0 {
-			pair(store, *relay, key)
+		if setup(*relay) {
+			if len(store.devices()) == 0 {
+				pair(store, *relay, key)
+			} else {
+				fmt.Println(paired(store.devices()))
+			}
 		}
 	case "pair":
 		pair(store, *relay, key)
@@ -141,6 +146,33 @@ func env(name, otherwise string) string {
 		return value
 	}
 	return otherwise
+}
+
+func letPhonesIn(store store, relay string, key deviceKey) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		log.Fatal("tmux is not installed, and it is what runs the sessions")
+	}
+	// Two hosts with one key would keep taking the relay's connection from each other.
+	if !store.lock() {
+		log.Fatal("farol-host is already running on this machine")
+	}
+	if len(store.devices()) == 0 {
+		showCode(store, relay, key)
+	}
+	// First in the log, so a report that quotes the log says which release it was.
+	log.Printf("farol-host %s", version)
+	serve(newHost(key, store, newTmux(key.public)), relay+"/v1/rooms/"+room(key.public)+"/mac")
+}
+
+func paired(devices []device) string {
+	if len(devices) == 0 {
+		return "No phone is paired yet: pair shows a code to scan."
+	}
+	names := []string{}
+	for _, d := range devices {
+		names = append(names, d.Name)
+	}
+	return "Paired with " + strings.Join(names, ", ") + ". pair adds another phone."
 }
 
 // pair shows a code and waits for the running host to say a phone scanned it.

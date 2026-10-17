@@ -36,8 +36,14 @@ chmod +x "$bin/farol-host.new"
 mv "$bin/farol-host.new" "$bin/farol-host"
 # The program was called farol-remote before. That copy goes, so only one name is left on the PATH.
 rm -f "$bin/farol-remote"
+# fh is a shorter name, unless something else already goes by it.
+also=
+if ! command -v fh >/dev/null || [ "$(command -v fh)" = "$bin/fh" ]; then
+    ln -sf farol-host "$bin/fh"
+    also=", and fh as a shorter name"
+fi
 
-echo "Installed $bin/farol-host"
+echo "Installed $bin/farol-host$also"
 command -v tmux >/dev/null || echo "tmux is not installed, and farol-host needs it to run the sessions."
 case ":$PATH:" in
     *":$bin:"*) echo "Next: farol-host setup" ;;

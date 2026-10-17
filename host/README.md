@@ -10,7 +10,7 @@ The phone reaches the server through the relay, as it reaches a Mac. Everything 
 
 You need a machine that stays on, with [tmux](https://github.com/tmux/tmux) installed, and Farol on your iPhone.
 
-**1. Install.** This puts `farol-host` in `~/.local/bin`.
+**1. Install.** This puts `farol-host` in `~/.local/bin`, with `fh` as a shorter name for it.
 
 ```sh
 curl -fsSL https://farol.sh/host.sh | sh
@@ -40,7 +40,8 @@ A phone knows several Macs and servers at once. Scanning a server's code adds it
 | Command | What it does |
 | --- | --- |
 | `farol-host setup` | Makes the machine ready: connects your agents, keeps `farol-host` running, pairs a phone. Safe to run again. |
-| `farol-host` | Lets paired phones in, for as long as it runs. What the service runs for you. |
+| `farol-host` | Lists the commands, and says whether it is running and which phones are paired. |
+| `farol-host run` | Lets paired phones in, for as long as it runs. What the service runs for you. |
 | `farol-host pair` | Shows a code to pair another phone. `farol-host` has to be running. |
 | `farol-host devices` | Lists the phones this machine lets in. |
 | `farol-host forget <name>` | Stops letting a phone in. One that is connected is cut off at once. |
@@ -55,7 +56,7 @@ On a machine that has none, `farol-host setup` still connects your agents. Keep 
 
 ```sh
 tmux new -s farol-host
-farol-host
+farol-host run
 ```
 
 Scan the code it shows, then leave with `Ctrl-b d`.
@@ -66,7 +67,7 @@ Scan the code it shows, then leave with `Ctrl-b d`.
 - **What it keeps.** This machine's key and the phones it paired, in `farol-host` under your config folder, readable by you alone. `FAROL_HOST_DIR` puts them elsewhere. Where to notify each phone is kept beside them. Pictures from the phone go in `Farol/Attachments` under your cache folder, and are removed after a week.
 - **Updating.** Run the install line again, then `farol-host setup` to restart it on the new version and connect the hooks it now needs. Restart your agents so they read them.
 - **What setup changes.** It adds hooks to `~/.claude/settings.json` and `~/.codex/hooks.json`, keeping a copy of each as `.farol-backup`, and adds a systemd service named `farol-host`.
-- **Removing it.** `systemctl --user disable --now farol-host`, then delete `~/.local/bin/farol-host` and that folder. As root, leave out `--user`.
+- **Removing it.** `systemctl --user disable --now farol-host`, then delete `~/.local/bin/farol-host`, `~/.local/bin/fh` and that folder. As root, leave out `--user`.
 
 ## Not done yet
 
