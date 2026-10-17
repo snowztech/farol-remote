@@ -179,7 +179,9 @@ Environment=%q
 	if dir != "" {
 		text += fmt.Sprintf("Environment=%q\n", "FAROL_HOST_DIR="+dir)
 	}
-	return text + fmt.Sprintf(`Restart=always
+	// A session the phone opens with no tmux running starts tmux from here. Stopping only the host keeps it, and its agents, through a restart or an update.
+	return text + fmt.Sprintf(`KillMode=process
+Restart=always
 RestartSec=5
 
 [Install]
