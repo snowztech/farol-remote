@@ -41,7 +41,7 @@ var controlKey = regexp.MustCompile(`^C-[a-z]$`)
 // The names tmux gives the keys a phone can press.
 var tmuxKeys = map[string]string{
 	"enter": "Enter", "escape": "Escape", "tab": "Tab", "backspace": "BSpace",
-	"up": "Up", "down": "Down", "left": "Left", "right": "Right", "interrupt": "C-c",
+	"up": "Up", "down": "Down", "left": "Left", "right": "Right", "shiftTab": "BTab", "interrupt": "C-c",
 }
 
 // tmux runs the sessions. Every tmux session on this machine is one the phone can see, and its active pane is the one it reads and types into.
@@ -87,20 +87,29 @@ func run(input string, name string, args ...string) (string, error) {
 
 func (t *tmux) sessions() []session {
 	// No tmux server means no sessions, which tmux says as an error.
-	out, _ := run("", "tmux", "list-sessions", "-F", "#{session_id}\t#{session_created}\t#{pane_current_path}\t#{"+statusOption+"}\t#{"+logOption+"}\t#{"+agentOption+"}\t#{"+requestOption+"}\t#{session_name}")
+	out, _ := run("", "tmux", "list-sessions", "-F", "#{session_id}\t#{session_created}\t#{pane_current_path}\t#{"+statusOption+"}\t#{"+logOption+"}\t#{"+agentOption+"}\t#{"+requestOption+"}\t#{"+statusAtOption+"}\t#{session_name}")
 	list, targets, agents := []session{}, map[string]string{}, map[string]agentState{}
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		// The name is last, since it is the one field that may hold a tab.
-		fields := strings.SplitN(line, "\t", 8)
-		if len(fields) != 8 {
+		fields := strings.SplitN(line, "\t", 9)
+		if len(fields) != 9 {
 			continue
+		}
+		status, request := fields[3], fields[6]
+		if status == "working" || status == "waiting" {
+			// A status from before this one was kept has no time, and any stop at the end of the log is newer.
+			at, _ := time.Parse(time.RFC3339Nano, fields[7])
+			if fields[4] != "" && agent.Interrupted(fields[4], at) {
+				run("", "tmux", "set-option", "-u", "-t", fields[0], statusOption, ";", "set-option", "-u", "-t", fields[0], requestOption)
+				status, request = "", ""
+			}
 		}
 		id := sessionID(t.host, fields[0], fields[1])
 		targets[id] = fields[0] + ":"
-		agents[id] = agentState{folder: fields[2], status: fields[3], log: fields[4], started: fields[5] != "", request: readRequest(fields[6])}
-		one := session{ID: id, Name: fields[7], Status: "idle"}
-		if fields[3] != "" {
-			one.Status = fields[3]
+		agents[id] = agentState{folder: fields[2], status: status, log: fields[4], started: fields[5] != "", request: readRequest(request)}
+		one := session{ID: id, Name: fields[8], Status: "idle"}
+		if status != "" {
+			one.Status = status
 		}
 		if name := t.branch(fields[2]); name != "" {
 			one.Branch = &name
@@ -237,6 +246,8 @@ func (t *tmux) press(id, key string) bool {
 // Where a session's agent is kept: on the tmux session itself, so the host has nothing of its own to store or to lose.
 const (
 	statusOption = "@farol_status"
+	// When the hook set it, to tell a stop that came after it from one before.
+	statusAtOption = "@farol_status_at"
 	// The file the agent logs its conversation to, as its hooks name it.
 	logOption = "@farol_log"
 	// Set while an agent runs, from its start to its end. Before its first message it may have no log, and a phone shows it as an empty conversation.
@@ -284,6 +295,7 @@ func setStatus(pane, event string, hook []byte) bool {
 	// ponytail: a background agent that stops leaves the status as it is. Counting them, as the Mac does, would keep it working until the last one ends.
 	if event != "subagent-stop" {
 		set(statusOption, status)
+		set(statusAtOption, time.Now().UTC().Format(time.RFC3339Nano))
 	}
 	switch log := agent.LogIn(hook); {
 	case log != "":

@@ -117,3 +117,39 @@ func TestListsReadsAndTypesIntoARealSession(t *testing.T) {
 		t.Fatal("took a status that is not one")
 	}
 }
+
+func TestASessionStoppedFromItsTerminalGoesBackToIdle(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux is not installed")
+	}
+	dir, err := os.MkdirTemp("/tmp", "farol")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMUX_TMPDIR", dir)
+	t.Cleanup(func() {
+		run("", "tmux", "kill-server")
+		os.RemoveAll(dir)
+	})
+	if _, err := run("", "tmux", "new-session", "-d", "-s", "agent", "cat"); err != nil {
+		t.Fatal(err)
+	}
+	pane, _ := run("", "tmux", "display-message", "-p", "-t", "agent", "#{pane_id}")
+	log := dir + "/session.jsonl"
+	setStatus(strings.TrimSpace(pane), "working", []byte(`{"session_id":"s","transcript_path":"`+log+`"}`))
+	tm := newTmux([]byte("host"))
+	if list := tm.sessions(); list[0].Status != "working" {
+		t.Fatalf("sessions %+v", list)
+	}
+
+	// Claude Code runs no hook when it is stopped, and only writes it down.
+	stop := `{"parentUuid":"a1","type":"user","uuid":"u2","timestamp":"` + time.Now().Add(time.Second).UTC().Format(time.RFC3339Nano) +
+		`","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]}}`
+	os.WriteFile(log, []byte(stop+"\n"), 0o600)
+	if list := tm.sessions(); list[0].Status != "idle" {
+		t.Fatalf("sessions %+v", list)
+	}
+	if kept, _ := run("", "tmux", "show-options", "-v", "-t", "agent", statusOption); strings.TrimSpace(kept) != "" {
+		t.Fatalf("tmux still says %q", kept)
+	}
+}

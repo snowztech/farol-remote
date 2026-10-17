@@ -218,6 +218,10 @@ func (h *host) changes(id uint32, p *phone, command, session string) {
 		h.tell(id, p, refusedEvent(command, "This session is not in a git repository."))
 		return
 	}
+	// Enough to review, and far under the relay's limit for one message.
+	if len(files) > 1000 {
+		files, label = files[:1000], label+", first 1000 files"
+	}
 	h.tell(id, p, changesEvent(session, label, files))
 }
 

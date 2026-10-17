@@ -3,9 +3,59 @@ package agent
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
+
+// How Claude Code writes, as your turn, that you stopped it.
+const interruptMark = "[Request interrupted by user"
+
+// Interrupted is true when the last turn in a Claude Code log is you stopping it, after since.
+// Claude Code runs no hook when you stop it, so this is how a host learns the agent no longer works.
+func Interrupted(log string, since time.Time) bool {
+	file, err := os.Open(log)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return false
+	}
+	// What comes after the mark, like the permission mode, is short.
+	offset := max(0, info.Size()-16<<10)
+	tail := make([]byte, info.Size()-offset)
+	if _, err := file.ReadAt(tail, offset); err != nil {
+		return false
+	}
+	lines := bytes.Split(tail, []byte("\n"))
+	for i := len(lines) - 1; i >= 0; i-- {
+		var record struct {
+			Type      string    `json:"type"`
+			Sidechain bool      `json:"isSidechain"`
+			Timestamp time.Time `json:"timestamp"`
+			Message   *struct {
+				Content json.RawMessage `json:"content"`
+			} `json:"message"`
+		}
+		// The first line may be cut in two, and is then skipped like any other line that is not a turn.
+		if !bytes.Contains(lines[i], []byte(`"parentUuid"`)) || json.Unmarshal(lines[i], &record) != nil || record.Sidechain ||
+			(record.Type != "user" && record.Type != "assistant") {
+			continue
+		}
+		var blocks []claudeBlock
+		if record.Type != "user" || record.Message == nil || !record.Timestamp.After(since) || json.Unmarshal(record.Message.Content, &blocks) != nil {
+			return false
+		}
+		return slices.ContainsFunc(blocks, func(b claudeBlock) bool {
+			return b.Type == "text" && strings.HasPrefix(b.Text, interruptMark)
+		})
+	}
+	return false
+}
 
 // claudeLog is Claude Code's log. Each record names the one it follows with `parentUuid`, so the conversation is a tree:
 // tools run side by side each hang off the call that started them, and a prompt you rewound to sits beside the one it replaced.
@@ -141,8 +191,9 @@ func claudeMessages(kind string, content json.RawMessage, folder, id string) []M
 		text := strings.TrimSpace(block.Text)
 		switch {
 		case kind == "user" && block.Type == "text":
-			// What Claude Code adds to a turn by itself, like a command it ran or a notice, comes wrapped in a tag.
-			if text != "" && !strings.HasPrefix(text, "<") {
+			// What Claude Code adds to a turn by itself, like a command it ran or a notice, comes wrapped in a tag,
+			// and that you stopped it in brackets. The session going idle says that already.
+			if text != "" && !strings.HasPrefix(text, "<") && !strings.HasPrefix(text, interruptMark) {
 				messages = append(messages, Message{ID: id, Role: You, Text: text})
 			}
 		case kind == "user" && block.Type == "image":

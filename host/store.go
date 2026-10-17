@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"syscall"
 	"time"
 )
@@ -81,6 +82,20 @@ func (s store) saveDevices(devices []device) error {
 // add remembers a phone. One that pairs again takes the place of its older self.
 func (s store) add(paired device) error {
 	return s.saveDevices(append(without(s.devices(), paired.Key), paired))
+}
+
+// forget stops letting a phone in, and stops notifying it and updating its Live Activity.
+func (s store) forget(key []byte) error {
+	if err := s.saveDevices(without(s.devices(), key)); err != nil {
+		return err
+	}
+	pushes := slices.DeleteFunc(s.pushTargets(), func(t pushTarget) bool { return bytes.Equal(t.Device, key) })
+	text, _ := json.MarshalIndent(pushes, "", "  ")
+	if err := s.write("notify.json", text); err != nil {
+		return err
+	}
+	s.saveActivityTargets(slices.DeleteFunc(s.activityTargets(), func(t activityTarget) bool { return bytes.Equal(t.Device, key) }))
+	return nil
 }
 
 func without(devices []device, key []byte) []device {

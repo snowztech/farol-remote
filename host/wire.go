@@ -161,6 +161,8 @@ type command struct {
 			Session string `json:"session"`
 			Path    string `json:"path"`
 		} `json:"diff"`
+		// The phone forgot this host, and is not to be let in, notified, or have its Live Activity updated any more.
+		Forget *struct{} `json:"forget"`
 	} `json:"action"`
 }
 
@@ -279,6 +281,9 @@ func doneEvent(command string) []byte {
 func refusedEvent(command, reason string) []byte {
 	return event("refused", map[string]string{"command": command, "reason": reason})
 }
+
+// The most the relay passes in one message, as relay/peer.go says.
+const maxMessage = 256 << 10
 
 // The relay's own wrapping, one byte that says what a message is. It matches relay/frames.go.
 const (

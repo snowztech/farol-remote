@@ -22,7 +22,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
         .changes(session: session), .diff(session: session, path: "Sources/App.swift"),
         .answer(session: session, request: "toolu_01", choice: 2),
         .terminal(session: session, open: true), .control(session: session, key: "d"), .commands(session: session),
-        .attach(session: session, attachment: UUID(), part: 1, parts: 3, data: Data([0xFF, 0xD8, 0xFF])),
+        .attach(session: session, attachment: UUID(), part: 1, parts: 3, data: Data([0xFF, 0xD8, 0xFF])), .forget,
     ] {
         let command = RemoteCommand(action)
         #expect(try roundTrip(command) == command)

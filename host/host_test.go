@@ -694,3 +694,20 @@ func TestALiveActivityFollowsTheSessionsAndEndsWhenAllIsQuiet(t *testing.T) {
 		t.Fatal("an ended activity is still followed")
 	}
 }
+
+func TestAKeyThisHostDoesNotKnowIsRefusedAsSuch(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	same(t, b.ask("k", fmt.Sprintf(`{"key":{"session":%q,"key":"shiftTab"}}`, fakeSession)), doneEvent("k"))
+	same(t, b.ask("x", fmt.Sprintf(`{"key":{"session":%q,"key":"hyper"}}`, fakeSession)), refusedEvent("x", "This machine does not know that key. Update farol-host on it."))
+}
+
+func TestAPhoneThatForgetsTheHostIsNoLongerLetInOrNotified(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.ask("n", `{"notify":{"token":"q80=","sandbox":true}}`)
+	same(t, b.ask("f", `{"forget":{}}`), doneEvent("f"))
+	if len(b.host.store.devices()) != 0 || len(b.host.store.pushTargets()) != 0 || len(b.host.phones) != 0 {
+		t.Fatal("the phone is still known")
+	}
+}

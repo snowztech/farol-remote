@@ -100,7 +100,7 @@ func (r *relay) serveMac(ctx context.Context, name string, mac *peer) {
 			}
 			// Apple can be slow, and the Mac's other messages must not wait for it.
 			go func(payload []byte) {
-				if err := r.push.send(context.Background(), payload); err != nil {
+				if err := r.push.send(context.Background(), payload, name); err != nil {
 					r.failed.Add(1)
 					log.Printf("notification not sent: %v", err)
 					return

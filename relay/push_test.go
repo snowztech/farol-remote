@@ -46,7 +46,7 @@ func request(notice, sandbox string) []byte {
 
 func TestAsksAppleToNotifyThePhone(t *testing.T) {
 	p, calls := apple(t)
-	if err := p.send(context.Background(), request("waiting", "")); err != nil {
+	if err := p.send(context.Background(), request("waiting", ""), someRoom); err != nil {
 		t.Fatal(err)
 	}
 	got := <-calls
@@ -64,7 +64,7 @@ func TestAsksAppleToNotifyThePhone(t *testing.T) {
 
 func TestAnAppRunFromXcodeIsReachedOnApplesOtherServer(t *testing.T) {
 	p, calls := apple(t)
-	if err := p.send(context.Background(), request("done", "1")); err != nil {
+	if err := p.send(context.Background(), request("done", "1"), someRoom); err != nil {
 		t.Fatal(err)
 	}
 	if got := <-calls; !strings.HasPrefix(got.path, "/sandbox/") || !strings.Contains(got.body, "An agent finished.") {
@@ -79,7 +79,7 @@ func TestOnlySendsItsOwnWordsToRealTokens(t *testing.T) {
 		[]byte(`{"token":"../../other","notice":"waiting"}`),
 		[]byte(`not json`),
 	} {
-		if err := p.send(context.Background(), payload); err == nil {
+		if err := p.send(context.Background(), payload, someRoom); err == nil {
 			t.Fatalf("%s was sent", payload)
 		}
 	}
@@ -120,7 +120,7 @@ func TestAFailureNeverPutsTheTokenInTheLog(t *testing.T) {
 	p, _ := apple(t)
 	// Nothing listens here, so the call fails the way a network problem would.
 	p.production = "http://127.0.0.1:1"
-	err := p.send(context.Background(), request("waiting", ""))
+	err := p.send(context.Background(), request("waiting", ""), someRoom)
 	if err == nil || strings.Contains(err.Error(), someToken) {
 		t.Fatalf("error was %v", err)
 	}
@@ -134,7 +134,7 @@ func TestSaysWhyAppleRefused(t *testing.T) {
 	}))
 	t.Cleanup(refusing.Close)
 	p.production = refusing.URL
-	err := p.send(context.Background(), request("waiting", ""))
+	err := p.send(context.Background(), request("waiting", ""), someRoom)
 	if err == nil || !strings.Contains(err.Error(), "BadDeviceToken") || strings.Contains(err.Error(), someToken) {
 		t.Fatalf("error was %v", err)
 	}
@@ -143,7 +143,7 @@ func TestSaysWhyAppleRefused(t *testing.T) {
 func TestPassesOnWhatIsSealedWithoutReadingIt(t *testing.T) {
 	p, calls := apple(t)
 	asked, _ := json.Marshal(pushRequest{Token: someToken, Notice: "waiting", Sealed: "AQID+/8="})
-	if err := p.send(context.Background(), asked); err != nil {
+	if err := p.send(context.Background(), asked, someRoom); err != nil {
 		t.Fatal(err)
 	}
 	got := <-calls
@@ -151,7 +151,7 @@ func TestPassesOnWhatIsSealedWithoutReadingIt(t *testing.T) {
 		t.Fatalf("said %s", got.body)
 	}
 	bad, _ := json.Marshal(pushRequest{Token: someToken, Notice: "waiting", Sealed: `","aps":{}`})
-	if err := p.send(context.Background(), bad); err == nil {
+	if err := p.send(context.Background(), bad, someRoom); err == nil {
 		t.Fatal("something that is not sealed bytes was passed on")
 	}
 }
@@ -159,7 +159,7 @@ func TestPassesOnWhatIsSealedWithoutReadingIt(t *testing.T) {
 func TestUpdatesALiveActivityWithCountsAndSealedNames(t *testing.T) {
 	p, calls := apple(t)
 	payload, _ := json.Marshal(pushRequest{Token: someToken, Activity: "update", Waiting: 2, Working: 1, Sealed: "c2VhbGVk"})
-	if err := p.send(context.Background(), payload); err != nil {
+	if err := p.send(context.Background(), payload, someRoom); err != nil {
 		t.Fatal(err)
 	}
 	got := <-calls
@@ -185,7 +185,7 @@ func TestUpdatesALiveActivityWithCountsAndSealedNames(t *testing.T) {
 func TestStartsALiveActivityWithTheAppClosed(t *testing.T) {
 	p, calls := apple(t)
 	payload, _ := json.Marshal(pushRequest{Token: someToken, Activity: "start", Working: 1, Sealed: "c2VhbGVk"})
-	if err := p.send(context.Background(), payload); err != nil {
+	if err := p.send(context.Background(), payload, someRoom); err != nil {
 		t.Fatal(err)
 	}
 	got := <-calls
@@ -194,14 +194,16 @@ func TestStartsALiveActivityWithTheAppClosed(t *testing.T) {
 	}
 	var sent struct {
 		Aps struct {
-			Event string                `json:"event"`
-			Type  string                `json:"attributes-type"`
-			Alert map[string]string     `json:"alert"`
-			State struct{ Working int } `json:"content-state"`
+			Event      string                `json:"event"`
+			Type       string                `json:"attributes-type"`
+			Attributes map[string]string     `json:"attributes"`
+			Alert      map[string]string     `json:"alert"`
+			State      struct{ Working int } `json:"content-state"`
 		} `json:"aps"`
 	}
 	json.Unmarshal([]byte(got.body), &sent)
-	if sent.Aps.Event != "start" || sent.Aps.Type != "SessionsActivity" || sent.Aps.Alert["body"] != "An agent is working." || sent.Aps.State.Working != 1 {
+	// The Mac's room, so the phone knows whose it is.
+	if sent.Aps.Event != "start" || sent.Aps.Type != "SessionsActivity" || sent.Aps.Attributes["host"] != someRoom || sent.Aps.Alert["body"] != "An agent is working." || sent.Aps.State.Working != 1 {
 		t.Fatalf("said %s", got.body)
 	}
 }
@@ -214,7 +216,7 @@ func TestRefusesALiveActivityItDoesNotKnow(t *testing.T) {
 		{Token: someToken, Activity: "update", Sealed: "not base64!"},
 	} {
 		payload, _ := json.Marshal(asked)
-		if p.send(context.Background(), payload) == nil {
+		if p.send(context.Background(), payload, someRoom) == nil {
 			t.Fatalf("sent %+v", asked)
 		}
 	}
@@ -223,7 +225,7 @@ func TestRefusesALiveActivityItDoesNotKnow(t *testing.T) {
 func TestOnlyANewlyWaitingAgentIsUrgent(t *testing.T) {
 	p, calls := apple(t)
 	payload, _ := json.Marshal(pushRequest{Token: someToken, Activity: "update", Waiting: 1, Urgent: true})
-	if err := p.send(context.Background(), payload); err != nil {
+	if err := p.send(context.Background(), payload, someRoom); err != nil {
 		t.Fatal(err)
 	}
 	if got := <-calls; got.priority != "10" {

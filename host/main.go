@@ -106,14 +106,12 @@ func main() {
 			fmt.Println(d.Name)
 		}
 	case "forget":
-		kept := []device{}
 		for _, d := range store.devices() {
-			if d.Name != flag.Arg(1) {
-				kept = append(kept, d)
+			if d.Name == flag.Arg(1) {
+				if err := store.forget(d.Key); err != nil {
+					log.Fatal(err)
+				}
 			}
-		}
-		if err := store.saveDevices(kept); err != nil {
-			log.Fatal(err)
 		}
 	default:
 		flag.Usage()
@@ -234,7 +232,7 @@ func connect(h *host, address string) error {
 	}
 	defer conn.CloseNow()
 	// The relay's own limit, so a message it would pass is never refused here.
-	conn.SetReadLimit(256 << 10)
+	conn.SetReadLimit(maxMessage)
 	h.connected(func(message []byte) {
 		writing, done := context.WithTimeout(ctx, 10*time.Second)
 		defer done()

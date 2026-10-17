@@ -1,11 +1,13 @@
 package agent
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The same lines as Farol's TranscriptTests on the Mac, so both read a log the same way.
@@ -234,5 +236,32 @@ func TestOnlyARequestOrASingleQuestionIsARequest(t *testing.T) {
 		if request := RequestIn([]byte(input)); request != nil {
 			t.Fatalf("%s gave %+v", input, request)
 		}
+	}
+}
+
+func TestAStopCountsOnlyAtTheEndOfTheLogAndAfterTheStatus(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "session.jsonl")
+	write := func(lines ...string) { os.WriteFile(log, []byte(strings.Join(lines, "\n")+"\n"), 0o600) }
+	answer := `{"parentUuid":"u1","type":"assistant","uuid":"a1","timestamp":"2026-10-17T10:00:01Z","message":{"role":"assistant","content":[{"type":"text","text":"Lighthouses"}]}}`
+	stop := `{"parentUuid":"a1","type":"user","uuid":"u2","timestamp":"2026-10-17T10:00:05Z","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]}}`
+	before, after := time.Date(2026, 10, 17, 10, 0, 0, 0, time.UTC), time.Date(2026, 10, 17, 10, 0, 9, 0, time.UTC)
+
+	write(answer, stop, `{"type":"permission-mode","permissionMode":"default"}`)
+	if !Interrupted(log, before) {
+		t.Fatal("a stop after the status was missed")
+	}
+	if Interrupted(log, after) {
+		t.Fatal("a stop from before the status counted")
+	}
+	write(answer, stop, `{"parentUuid":"u2","type":"user","uuid":"u3","timestamp":"2026-10-17T10:00:08Z","message":{"role":"user","content":"go on"}}`)
+	if Interrupted(log, before) {
+		t.Fatal("a prompt after the stop did not end it")
+	}
+	write(answer)
+	if Interrupted(log, before) || Interrupted(log+".gone", before) {
+		t.Fatal("no stop counted as one")
+	}
+	if shown := claudeMessages("user", json.RawMessage(`[{"type":"text","text":"[Request interrupted by user for tool use]"}]`), "", "u2"); len(shown) != 0 {
+		t.Fatalf("the stop shows as %v", shown)
 	}
 }
