@@ -14,7 +14,7 @@ Three programs take part in Remote: a host that owns the sessions, the relay in 
 | **Rooms** | `relay/` | Joins a host with its phones. A room is named by the hash of the host's public key. |
 | **Pusher** | `relay/` | Asks Apple to notify a phone. It writes the words itself, so a host cannot make a phone show any text it likes. |
 | **RemoteClient** | the Farol for iPhone app | The phone's side: the paired host, the connection, and what the host last said. |
-| **farol-host** | `host/`, experimental | Plays the host's part on a server, with tmux sessions. It speaks the same frames, written again in Go and tested against what the Swift package seals. |
+| **farol-host** | `host/`, experimental | Plays the host's part on a server, with tmux windows as its sessions. It speaks the same frames, written again in Go and tested against what the Swift package seals. |
 
 ## Messages
 

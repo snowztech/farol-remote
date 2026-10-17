@@ -55,12 +55,36 @@ func TestListsReadsAndTypesIntoARealSession(t *testing.T) {
 	if _, ok := tm.history(id); !ok {
 		t.Fatal("no history")
 	}
-	made, ok := tm.open(dir, "new.one", "echo opened")
-	if list := tm.sessions(); !ok || len(list) != 2 || !slices.ContainsFunc(list, func(s session) bool { return s.ID == made }) {
+	// A new session is a window in the tmux session already there, as a tab.
+	made, ok := tm.open(dir, "new-one", "echo opened")
+	list = tm.sessions()
+	if !ok || len(list) != 2 || !slices.ContainsFunc(list, func(s session) bool { return s.ID == made && s.Name == "demo · new-one" }) {
 		t.Fatalf("opened %v %v, sessions %+v", made, ok, list)
 	}
-	if !tm.close(made) || len(tm.sessions()) != 1 {
-		t.Fatal("not closed")
+	if windows, _ := run("", "tmux", "list-windows", "-t", "demo", "-F", "#{window_id}"); len(strings.Fields(windows)) != 2 {
+		t.Fatalf("windows of demo: %q", windows)
+	}
+	ran := false
+	for i := 0; i < 40 && !ran; i++ {
+		text, _ := tm.screen(made)
+		ran = strings.Contains(text, "\nopened")
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !ran {
+		text, _ := tm.screen(made)
+		t.Fatalf("the command did not run in the new window: %q", text)
+	}
+	// What an agent's hooks say of one window is not said of the others.
+	first, _ := run("", "tmux", "list-panes", "-t", "demo:0", "-F", "#{pane_id}")
+	setStatus(strings.TrimSpace(first), "working", nil)
+	for _, s := range tm.sessions() {
+		if want := map[bool]string{true: "idle", false: "working"}[s.ID == made]; s.Status != want {
+			t.Fatalf("%s is %s", s.Name, s.Status)
+		}
+	}
+	setStatus(strings.TrimSpace(first), "clear", nil)
+	if !tm.close(made) || len(tm.sessions()) != 1 || tm.sessions()[0].Name != "demo" {
+		t.Fatalf("not closed: %+v", tm.sessions())
 	}
 	if !tm.press(id, "C-l") || tm.press(id, "C-Enter") {
 		t.Fatal("Control with a letter, and nothing else")
@@ -69,7 +93,7 @@ func TestListsReadsAndTypesIntoARealSession(t *testing.T) {
 		t.Fatal("read a session that does not exist")
 	}
 
-	pane, _ := run("", "tmux", "list-panes", "-t", "demo", "-F", "#{pane_id}")
+	pane, _ := run("", "tmux", "list-panes", "-t", "demo:0", "-F", "#{pane_id}")
 	pane = strings.TrimSpace(pane)
 	const named = `{"session_id":"s","transcript_path":"/logs/a b.jsonl"}`
 	const asks = `{"hook_event_name":"PermissionRequest","tool_use_id":"toolu_1","tool_name":"Bash","tool_input":{"command":"rm -rf build\nmake","description":"Clean and build"}}`
@@ -118,6 +142,48 @@ func TestListsReadsAndTypesIntoARealSession(t *testing.T) {
 	}
 }
 
+// With no tmux running, a new session starts one, named after its project.
+func TestOpensTheFirstSessionWhenTmuxRunsNone(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux is not installed")
+	}
+	dir, err := os.MkdirTemp("/tmp", "farol")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMUX_TMPDIR", dir)
+	t.Cleanup(func() {
+		run("", "tmux", "kill-server")
+		os.RemoveAll(dir)
+	})
+	tm := newTmux([]byte("host"))
+	made, ok := tm.open(dir, "api", "")
+	if list := tm.sessions(); !ok || len(list) != 1 || list[0].ID != made || list[0].Name != "api" {
+		t.Fatalf("opened %v %v, sessions %+v", made, ok, list)
+	}
+}
+
+// Hooks older than windows kept what they said on the session, where every window would read it.
+func TestForgetsWhatOlderHooksKeptOnTheSession(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux is not installed")
+	}
+	dir, err := os.MkdirTemp("/tmp", "farol")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMUX_TMPDIR", dir)
+	t.Cleanup(func() {
+		run("", "tmux", "kill-server")
+		os.RemoveAll(dir)
+	})
+	run("", "tmux", "new-session", "-d", "-s", "old", "cat")
+	run("", "tmux", "set-option", "-t", "old", statusOption, "working")
+	if list := newTmux([]byte("host")).sessions(); len(list) != 1 || list[0].Status != "idle" {
+		t.Fatalf("sessions %+v", list)
+	}
+}
+
 func TestASessionStoppedFromItsTerminalGoesBackToIdle(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux is not installed")
@@ -149,7 +215,7 @@ func TestASessionStoppedFromItsTerminalGoesBackToIdle(t *testing.T) {
 	if list := tm.sessions(); list[0].Status != "idle" {
 		t.Fatalf("sessions %+v", list)
 	}
-	if kept, _ := run("", "tmux", "show-options", "-v", "-t", "agent", statusOption); strings.TrimSpace(kept) != "" {
+	if kept, _ := run("", "tmux", "show-options", "-w", "-v", "-t", "agent:", statusOption); strings.TrimSpace(kept) != "" {
 		t.Fatalf("tmux still says %q", kept)
 	}
 }

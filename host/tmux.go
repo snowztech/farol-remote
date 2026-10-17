@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,7 +30,7 @@ type terminal interface {
 	paste(id, text string) bool
 	// keys types text one key after the other.
 	keys(id, text string) bool
-	// open makes a session in a folder, named as asked when tmux takes the name, and types a command into its shell when there is one.
+	// open makes a session in a folder, a window named as asked in the tmux session last used, and types a command into its shell when there is one.
 	open(dir, name, command string) (string, bool)
 	close(id string) bool
 	press(id, key string) bool
@@ -44,11 +45,11 @@ var tmuxKeys = map[string]string{
 	"up": "Up", "down": "Down", "left": "Left", "right": "Right", "shiftTab": "BTab", "interrupt": "C-c",
 }
 
-// tmux runs the sessions. Every tmux session on this machine is one the phone can see, and its active pane is the one it reads and types into.
+// tmux runs the sessions. Every tmux window on this machine is one the phone can see, as each tab of Farol on a Mac is, and its active pane is the one it reads and types into.
 type tmux struct {
 	// This host's public key, which every session id is made with, so two hosts a phone sees never share one.
 	host []byte
-	// The tmux target of each session the phone was told about, by the id it was told.
+	// The tmux window of each session the phone was told about, by the id it was told.
 	targets map[string]string
 	// What the hooks said of each session's agent, as of the last look.
 	agents map[string]agentState
@@ -73,7 +74,23 @@ type branch struct {
 }
 
 func newTmux(host []byte) *tmux {
+	forgetSessionOptions()
 	return &tmux{host: host, targets: map[string]string{}, agents: map[string]agentState{}, branches: map[string]branch{}}
+}
+
+// forgetSessionOptions clears what hooks kept on a tmux session before they kept it on its window, where every window of the session would read it.
+// ponytail: runs at every start. Drop once no server has hooks older than windows.
+func forgetSessionOptions() {
+	out, _ := run("", "tmux", "list-sessions", "-F", "#{session_id}")
+	var args []string
+	for _, id := range strings.Fields(out) {
+		for _, option := range []string{statusOption, statusAtOption, logOption, agentOption, requestOption} {
+			args = append(args, "set-option", "-u", "-t", id, option, ";")
+		}
+	}
+	if len(args) > 0 {
+		run("", "tmux", args[:len(args)-1]...)
+	}
 }
 
 func run(input string, name string, args ...string) (string, error) {
@@ -87,7 +104,9 @@ func run(input string, name string, args ...string) (string, error) {
 
 func (t *tmux) sessions() []session {
 	// No tmux server means no sessions, which tmux says as an error.
-	out, _ := run("", "tmux", "list-sessions", "-F", "#{session_id}\t#{session_created}\t#{pane_current_path}\t#{"+statusOption+"}\t#{"+logOption+"}\t#{"+agentOption+"}\t#{"+requestOption+"}\t#{"+statusAtOption+"}\t#{session_name}")
+	// A window alone in its session goes by the session's name, and one of several by both.
+	out, _ := run("", "tmux", "list-windows", "-a", "-F", "#{window_id}\t#{start_time}\t#{pane_current_path}\t#{"+statusOption+"}\t#{"+logOption+"}\t#{"+agentOption+"}\t#{"+requestOption+"}\t#{"+statusAtOption+"}\t"+
+		"#{?#{==:#{session_windows},1},#{session_name},#{session_name} · #{window_name}}")
 	list, targets, agents := []session{}, map[string]string{}, map[string]agentState{}
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		// The name is last, since it is the one field that may hold a tab.
@@ -100,12 +119,12 @@ func (t *tmux) sessions() []session {
 			// A status from before this one was kept has no time, and any stop at the end of the log is newer.
 			at, _ := time.Parse(time.RFC3339Nano, fields[7])
 			if fields[4] != "" && agent.Interrupted(fields[4], at) {
-				run("", "tmux", "set-option", "-u", "-t", fields[0], statusOption, ";", "set-option", "-u", "-t", fields[0], requestOption)
+				run("", "tmux", "set-option", "-w", "-u", "-t", fields[0], statusOption, ";", "set-option", "-w", "-u", "-t", fields[0], requestOption)
 				status, request = "", ""
 			}
 		}
 		id := sessionID(t.host, fields[0], fields[1])
-		targets[id] = fields[0] + ":"
+		targets[id] = fields[0]
 		agents[id] = agentState{folder: fields[2], status: status, log: fields[4], started: fields[5] != "", request: readRequest(request)}
 		one := session{ID: id, Name: fields[8], Status: "idle"}
 		if status != "" {
@@ -120,11 +139,11 @@ func (t *tmux) sessions() []session {
 	return list
 }
 
-// sessionID is the id a phone knows a session by. tmux counts sessions from zero after a restart,
-// so the time the session was made is part of it, and an old id never means a new session.
+// sessionID is the id a phone knows a session by: a tmux window's. tmux counts windows from zero after a restart,
+// so the time its server started is part of it, and an old id never means a new session.
 // The host's key is part of it too: a phone sees several hosts, and two of them may each make a first session in the same second.
-func sessionID(host []byte, tmuxID, created string) string {
-	sum := sha256.Sum256(append(append([]byte("farol-host "), host...), " "+tmuxID+" "+created...))
+func sessionID(host []byte, tmuxID, started string) string {
+	sum := sha256.Sum256(append(append([]byte("farol-host "), host...), " "+tmuxID+" "+started...))
 	return strings.ToUpper(fmt.Sprintf("%x-%x-%x-%x-%x", sum[:4], sum[4:6], sum[6:8], sum[8:10], sum[10:16]))
 }
 
@@ -141,7 +160,7 @@ func (t *tmux) branch(dir string) string {
 	return known.name
 }
 
-// target is the tmux name of a session, by the id the phone uses. A phone writes ids in capitals, and nothing says it must.
+// target is the tmux window of a session, by the id the phone uses. A phone writes ids in capitals, and nothing says it must.
 func (t *tmux) target(id string) (string, bool) {
 	target, ok := t.targets[strings.ToUpper(id)]
 	if !ok {
@@ -173,7 +192,7 @@ func (t *tmux) agentIn(id string) (agentState, bool) {
 
 func (t *tmux) answered(id string) {
 	if target, ok := t.target(id); ok {
-		run("", "tmux", "set-option", "-u", "-t", target, requestOption)
+		run("", "tmux", "set-option", "-w", "-u", "-t", target, requestOption)
 		agent := t.agents[strings.ToUpper(id)]
 		agent.request = nil
 		t.agents[strings.ToUpper(id)] = agent
@@ -181,22 +200,47 @@ func (t *tmux) answered(id string) {
 }
 
 func (t *tmux) open(dir, name, command string) (string, bool) {
-	made := []string{"new-session", "-d", "-P", "-F", "#{session_id}\t#{session_created}", "-c", dir}
-	out, err := run("", "tmux", append(made, "-s", name)...)
-	if err != nil {
-		// The name is taken, or is not one tmux takes. It picks one of its own.
-		out, err = run("", "tmux", made...)
+	said := []string{"-d", "-P", "-F", "#{window_id}\t#{start_time}", "-c", dir}
+	var out string
+	var err error
+	if last := lastSession(); last != "" {
+		// A tab in the tmux you have open, as the Mac adds one to its window. -d leaves you on the window you are in.
+		out, err = run("", "tmux", append([]string{"new-window", "-t", last + ":", "-n", name}, said...)...)
+	} else {
+		made := append([]string{"new-session"}, said...)
+		if out, err = run("", "tmux", append(made, "-s", name)...); err != nil {
+			// The name is not one tmux takes. It picks one of its own.
+			out, err = run("", "tmux", made...)
+		}
 	}
-	tmuxID, created, ok := strings.Cut(strings.TrimSpace(out), "\t")
+	tmuxID, started, ok := strings.Cut(strings.TrimSpace(out), "\t")
 	if err != nil || !ok {
 		return "", false
 	}
 	// Typed into the shell rather than run in its place, so the session stays when the agent ends, as a tab on the Mac does.
 	if command != "" {
-		run("", "tmux", "send-keys", "-t", tmuxID+":", "-l", "--", command)
-		run("", "tmux", "send-keys", "-t", tmuxID+":", "Enter")
+		run("", "tmux", "send-keys", "-t", tmuxID, "-l", "--", command)
+		run("", "tmux", "send-keys", "-t", tmuxID, "Enter")
 	}
-	return sessionID(t.host, tmuxID, created), true
+	return sessionID(t.host, tmuxID, started), true
+}
+
+// lastSession is the tmux session used last, one with a terminal attached first. Empty when tmux runs none.
+func lastSession() string {
+	out, _ := run("", "tmux", "list-sessions", "-F", "#{session_attached}\t#{session_activity}\t#{session_id}")
+	last, lastAttached, lastUsed := "", false, int64(-1)
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		fields := strings.SplitN(line, "\t", 3)
+		if len(fields) != 3 {
+			continue
+		}
+		attached := fields[0] != "0"
+		used, _ := strconv.ParseInt(fields[1], 10, 64)
+		if (attached && !lastAttached) || (attached == lastAttached && used > lastUsed) {
+			last, lastAttached, lastUsed = fields[2], attached, used
+		}
+	}
+	return last
 }
 
 func (t *tmux) close(id string) bool {
@@ -204,7 +248,7 @@ func (t *tmux) close(id string) bool {
 	if !ok {
 		return false
 	}
-	_, err := run("", "tmux", "kill-session", "-t", target)
+	_, err := run("", "tmux", "kill-window", "-t", target)
 	return err == nil
 }
 
@@ -243,7 +287,7 @@ func (t *tmux) press(id, key string) bool {
 	return err == nil
 }
 
-// Where a session's agent is kept: on the tmux session itself, so the host has nothing of its own to store or to lose.
+// Where a session's agent is kept: on its tmux window, so the host has nothing of its own to store or to lose.
 const (
 	statusOption = "@farol_status"
 	// When the hook set it, to tell a stop that came after it from one before.
@@ -287,9 +331,9 @@ func setStatus(pane, event string, hook []byte) bool {
 	var args []string
 	set := func(option, value string) {
 		if value == "" {
-			args = append(args, "set-option", "-u", "-t", pane, option, ";")
+			args = append(args, "set-option", "-w", "-u", "-t", pane, option, ";")
 		} else {
-			args = append(args, "set-option", "-t", pane, option, value, ";")
+			args = append(args, "set-option", "-w", "-t", pane, option, value, ";")
 		}
 	}
 	// ponytail: a background agent that stops leaves the status as it is. Counting them, as the Mac does, would keep it working until the last one ends.
