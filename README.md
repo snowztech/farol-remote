@@ -17,7 +17,7 @@ curl -fsSL https://farol.sh/host.sh | sh
 farol-host setup
 ```
 
-Every tmux session on that machine is then one the phone can open. The Mac and server cannot be paired at the same time yet. The full steps are in [host/README.md](host/README.md).
+Every tmux session on that machine is then one the phone can open, next to your Mac's sessions. The full steps are in [host/README.md](host/README.md).
 
 ## Docs
 

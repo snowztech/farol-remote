@@ -27,7 +27,7 @@ func TestListsReadsAndTypesIntoARealSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tm := newTmux()
+	tm := newTmux([]byte("host"))
 	list := tm.sessions()
 	if len(list) != 1 || list[0].Name != "demo" || list[0].Status != "idle" {
 		t.Fatalf("sessions %+v", list)

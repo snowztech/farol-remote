@@ -31,6 +31,8 @@ var tmuxKeys = map[string]string{
 
 // tmux runs the sessions. Every tmux session on this machine is one the phone can see, and its active pane is the one it reads and types into.
 type tmux struct {
+	// This host's public key, which every session id is made with, so two hosts a phone sees never share one.
+	host []byte
 	// The tmux target of each session the phone was told about, by the id it was told.
 	targets map[string]string
 	// The branch of each folder, asked of git every few seconds and not on every look.
@@ -42,8 +44,8 @@ type branch struct {
 	asked time.Time
 }
 
-func newTmux() *tmux {
-	return &tmux{targets: map[string]string{}, branches: map[string]branch{}}
+func newTmux(host []byte) *tmux {
+	return &tmux{host: host, targets: map[string]string{}, branches: map[string]branch{}}
 }
 
 func run(input string, name string, args ...string) (string, error) {
@@ -64,7 +66,7 @@ func (t *tmux) sessions() []session {
 		if len(fields) != 5 {
 			continue
 		}
-		id := sessionID(fields[0], fields[1])
+		id := sessionID(t.host, fields[0], fields[1])
 		targets[id] = fields[0] + ":"
 		one := session{ID: id, Name: fields[4], Status: "idle"}
 		if fields[3] != "" {
@@ -81,8 +83,9 @@ func (t *tmux) sessions() []session {
 
 // sessionID is the id a phone knows a session by. tmux counts sessions from zero after a restart,
 // so the time the session was made is part of it, and an old id never means a new session.
-func sessionID(tmuxID, created string) string {
-	sum := sha256.Sum256([]byte("farol-host " + tmuxID + " " + created))
+// The host's key is part of it too: a phone sees several hosts, and two of them may each make a first session in the same second.
+func sessionID(host []byte, tmuxID, created string) string {
+	sum := sha256.Sum256(append(append([]byte("farol-host "), host...), " "+tmuxID+" "+created...))
 	return strings.ToUpper(fmt.Sprintf("%x-%x-%x-%x-%x", sum[:4], sum[4:6], sum[6:8], sum[8:10], sum[10:16]))
 }
 

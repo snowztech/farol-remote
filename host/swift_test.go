@@ -179,8 +179,12 @@ func TestWritesEventsAsSwiftReadsThem(t *testing.T) {
 	v := vectors(t)
 	const id, sessionID = "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE", "11111111-2222-3333-4444-555555555555"
 	branch := "main"
+	// The hello Swift reads, as the Swift package's tests say it does. The recording's own hello is from before hosts said what they can do.
+	if got, want := read[any](t, string(helloEvent("host"))), read[any](t, `{"hello":{"version":1,"features":[],"name":"host"}}`); !reflect.DeepEqual(got, want) {
+		t.Fatalf("hello: wrote %s", helloEvent("host"))
+	}
 	ours := [][]byte{
-		helloEvent(),
+		nil,
 		sessionsEvent([]session{{sessionID, "n", &branch, "idle"}, {sessionID, "n", nil, "working"}}),
 		screenEvent(sessionID, "s"),
 		historyEvent(sessionID, "h"),
@@ -188,6 +192,9 @@ func TestWritesEventsAsSwiftReadsThem(t *testing.T) {
 		refusedEvent(id, "no"),
 	}
 	for i, text := range ours {
+		if text == nil {
+			continue
+		}
 		if got, want := read[any](t, string(text)), read[any](t, v.Events[i]); !reflect.DeepEqual(got, want) {
 			t.Fatalf("event %d: wrote %s, Swift writes %s", i, text, v.Events[i])
 		}

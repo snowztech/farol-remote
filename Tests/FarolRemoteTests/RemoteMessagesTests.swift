@@ -33,7 +33,8 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     let session = RemoteSession(id: UUID(), name: "Fix flaky CI tests", branch: "fix/flaky-tests", status: .waiting)
     let command = UUID()
     for event: RemoteEvent in [
-        .hello(version: 1), .sessions([session]), .sessions([]), .screen(session: session.id, text: "❯ No, exit\n"),
+        .hello(version: 1), .hello(version: 1, features: ["conversation", "requests"], name: "Hetzner VM"), .hello(version: 1, features: []),
+        .sessions([session]), .sessions([]), .screen(session: session.id, text: "❯ No, exit\n"),
         .done(command: command), .refused(command: command, reason: "Remote is off."), .history(session: session.id, text: "earlier\nlines"),
         .options(projects: [RemoteChoice(id: "/Users/me/shelf", name: "shelf")], agents: [RemoteChoice(id: "a", name: "Claude Code")], agent: "a"),
         .opened(command: command, session: session.id),
@@ -170,4 +171,19 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     let sealed = Data(count: command.count + 64)
     let message = RelayFrame.encode(try JSONEncoder().encode(WireFrame.sealed(sealed)), to: 1)
     #expect(message.count < 200_000)
+}
+
+@Test func aHostSaysWhatItCanDo() throws {
+    #expect(RemoteFeature.of(["conversation", "pictures-in-3d", "terminal"]) == [.conversation, .terminal])
+    #expect(RemoteFeature.of([]).isEmpty)
+    #expect(RemoteFeature.of(nil) == Set(RemoteFeature.allCases))
+    // A host from before features greets as it always did, and reads as one that said nothing.
+    let old = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1}}"#.utf8))
+    #expect(old == .hello(version: 1))
+}
+
+@Test func farolHostsHelloReadsAsAHostThatDoesNoMore() throws {
+    // What `farol-host` writes, as in host/testdata/swift.json.
+    let hello = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1,"features":[],"name":"host"}}"#.utf8))
+    #expect(hello == .hello(version: 1, features: [], name: "host"))
 }

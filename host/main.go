@@ -87,7 +87,7 @@ func main() {
 		}
 		// First in the log, so a report that quotes the log says which release it was.
 		log.Printf("farol-host %s", version)
-		serve(newHost(key, store, newTmux()), *relay+"/v1/rooms/"+room(key.public)+"/mac")
+		serve(newHost(key, store, newTmux(key.public)), *relay+"/v1/rooms/"+room(key.public)+"/mac")
 	case "setup":
 		if setup(*relay) && len(store.devices()) == 0 {
 			pair(store, *relay, key)

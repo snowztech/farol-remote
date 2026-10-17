@@ -31,7 +31,7 @@ tmux new -s api -c ~/code/api
 claude
 ```
 
-A phone knows one Mac or one server at a time. Scanning a server's code takes it away from your Mac, and scanning the Mac's code brings it back.
+A phone knows several Macs and servers at once. Scanning a server's code adds it next to your Mac, and its sessions show in the same list, with the server's name.
 
 ## Commands
 
@@ -70,7 +70,6 @@ Scan the code it shows, then leave with `Ctrl-b d`.
 
 - Notifications when an agent waits or finishes.
 - Starting a task from the phone.
-- A phone paired with a Mac and a server at the same time.
 
 ## Work on it
 
