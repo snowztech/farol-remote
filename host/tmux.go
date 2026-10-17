@@ -29,6 +29,9 @@ type terminal interface {
 	paste(id, text string) bool
 	// keys types text one key after the other.
 	keys(id, text string) bool
+	// open makes a session in a folder, named as asked when tmux takes the name, and types a command into its shell when there is one.
+	open(dir, name, command string) (string, bool)
+	close(id string) bool
 	press(id, key string) bool
 }
 
@@ -166,6 +169,34 @@ func (t *tmux) answered(id string) {
 		agent.request = nil
 		t.agents[strings.ToUpper(id)] = agent
 	}
+}
+
+func (t *tmux) open(dir, name, command string) (string, bool) {
+	made := []string{"new-session", "-d", "-P", "-F", "#{session_id}\t#{session_created}", "-c", dir}
+	out, err := run("", "tmux", append(made, "-s", name)...)
+	if err != nil {
+		// The name is taken, or is not one tmux takes. It picks one of its own.
+		out, err = run("", "tmux", made...)
+	}
+	tmuxID, created, ok := strings.Cut(strings.TrimSpace(out), "\t")
+	if err != nil || !ok {
+		return "", false
+	}
+	// Typed into the shell rather than run in its place, so the session stays when the agent ends, as a tab on the Mac does.
+	if command != "" {
+		run("", "tmux", "send-keys", "-t", tmuxID+":", "-l", "--", command)
+		run("", "tmux", "send-keys", "-t", tmuxID+":", "Enter")
+	}
+	return sessionID(t.host, tmuxID, created), true
+}
+
+func (t *tmux) close(id string) bool {
+	target, ok := t.target(id)
+	if !ok {
+		return false
+	}
+	_, err := run("", "tmux", "kill-session", "-t", target)
+	return err == nil
 }
 
 func (t *tmux) paste(id, text string) bool {

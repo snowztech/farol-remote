@@ -141,6 +141,14 @@ type command struct {
 		Activity *json.RawMessage `json:"activity"`
 		Options  *json.RawMessage `json:"options"`
 		Task     *json.RawMessage `json:"task"`
+		// A new session in a project from `options`, running the agent with that id from it, or a plain shell.
+		Open *struct {
+			Project string  `json:"project"`
+			Agent   *string `json:"agent"`
+		} `json:"open"`
+		Close *struct {
+			Session string `json:"session"`
+		} `json:"close"`
 	} `json:"action"`
 }
 
@@ -169,7 +177,7 @@ func event(name string, body any) []byte {
 }
 
 // What this host can do beyond screens and typing, by the names RemoteFeature gives them.
-var features = []string{"conversation", "requests", "commands", "attachments", "terminal", "notifications"}
+var features = []string{"conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions"}
 
 // helloEvent says the version this host speaks, what to call it, and what it can do.
 func helloEvent(name string) []byte {
@@ -221,6 +229,23 @@ func commandsEvent(session string, commands []agent.Command) []byte {
 // attachedEvent answers the last part of a picture with where it was put, which the phone puts in a reply.
 func attachedEvent(command, attachment, path string) []byte {
 	return event("attached", map[string]string{"command": command, "attachment": attachment, "path": path})
+}
+
+// optionsEvent says what a new session can be opened in and with. The first agent is the one to offer.
+func optionsEvent(projects, agents []choice) []byte {
+	if projects == nil {
+		projects = []choice{}
+	}
+	body := map[string]any{"projects": projects, "agents": agents}
+	if len(agents) > 0 {
+		body["agent"] = agents[0].ID
+	}
+	return event("options", body)
+}
+
+// openedEvent answers `open` with the session it made, so the phone goes straight to it.
+func openedEvent(command, session string) []byte {
+	return event("opened", map[string]string{"command": command, "session": session})
 }
 
 func doneEvent(command string) []byte {

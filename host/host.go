@@ -31,6 +31,8 @@ type host struct {
 	pasted map[string]paste
 	// Pictures from phones. Made the first time one comes.
 	pictures *inbox
+	// The session each `open` made, so one a phone sends again after a dropped connection is answered and not opened twice.
+	opened map[string]string
 	// When phones were last sent what changed.
 	looked time.Time
 	// What each session was doing at the last look, to notify phones of a change. Nil before the first.
@@ -67,7 +69,7 @@ type phone struct {
 
 func newHost(key deviceKey, store store, terminal terminal) *host {
 	return &host{key: key, store: store, terminal: terminal, send: func([]byte) {}, phones: map[uint32]*phone{}, seen: map[string]*seenCommands{},
-		transcripts: map[string]*agent.Transcript{}, pasted: map[string]paste{}}
+		transcripts: map[string]*agent.Transcript{}, pasted: map[string]paste{}, opened: map[string]string{}}
 }
 
 // connected is called with each new connection to the relay, which numbers the phones again.
@@ -228,7 +230,13 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 		h.act(id, p, c.ID, func() bool { return h.terminal.keys(a.Type.Session, a.Type.Text) })
 	case a.Key != nil:
 		h.act(id, p, c.ID, func() bool { return h.press(a.Key.Session, a.Key.Key) })
-	case a.Options != nil || a.Task != nil:
+	case a.Options != nil:
+		h.options(id, p)
+	case a.Open != nil:
+		h.open(id, p, c.ID, a.Open.Project, a.Open.Agent)
+	case a.Close != nil:
+		h.close(id, p, c.ID, a.Close.Session)
+	case a.Task != nil:
 		h.tell(id, p, refusedEvent(c.ID, "This machine cannot start tasks from the phone yet."))
 	case c.ID != "":
 		// One that opens and does not read is from a newer phone. It is told so, so it does not wait for an answer.

@@ -32,7 +32,7 @@ func (h *host) conversation(id uint32, p *phone, command, session string, before
 	case log == "":
 		h.tell(id, p, refusedEvent(command, "This session has no agent conversation to show."))
 	case before == nil:
-		h.open(id, p, session, log)
+		h.openConversation(id, p, session, log)
 	default:
 		messages := h.messages(log)
 		end := slices.IndexFunc(messages, func(m agent.Message) bool { return m.ID == *before })
@@ -45,7 +45,7 @@ func (h *host) conversation(id uint32, p *phone, command, session string, before
 	}
 }
 
-func (h *host) open(id uint32, p *phone, session, log string) {
+func (h *host) openConversation(id uint32, p *phone, session, log string) {
 	p.reading = &reading{session: session, log: log}
 	h.sendLatest(id, p, h.messages(log))
 }
@@ -77,7 +77,7 @@ func (h *host) follow(id uint32, p *phone) {
 		}
 	case log != "":
 		// The first log named, or a new one: Claude Code starts one after /clear.
-		h.open(id, p, p.watching, log)
+		h.openConversation(id, p, p.watching, log)
 	case started && p.toldEmpty != p.watching:
 		// An agent just started, with nothing said: the phone leaves the terminal for its empty conversation.
 		p.reading, p.toldEmpty = nil, p.watching

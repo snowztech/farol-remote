@@ -31,7 +31,7 @@ tmux new -s api -c ~/code/api
 claude
 ```
 
-On the phone, the session opens as the agent's conversation, and the terminal is one tap away. An approval or a question shows with its answers, to pick with a tap. Typing a slash lists the agent's commands and skills, and a photo or a screenshot can go with a reply. The phone is notified when an agent waits for you or finishes, even with the app closed. A session with no agent opens as its terminal.
+On the phone, the session opens as the agent's conversation, and the terminal is one tap away. An approval or a question shows with its answers, to pick with a tap. Typing a slash lists the agent's commands and skills, and a photo or a screenshot can go with a reply. The phone is notified when an agent waits for you or finishes, even with the app closed, and can open a new session in a project already open here, with Claude Code, Codex or a plain shell. A session with no agent opens as its terminal.
 
 A phone knows several Macs and servers at once. Scanning a server's code adds it next to your Mac, and its sessions show in the same list, with the server's name.
 
@@ -70,7 +70,7 @@ Scan the code it shows, then leave with `Ctrl-b d`.
 
 ## Not done yet
 
-- Starting a session or a task from the phone.
+- Starting a task in a new worktree from the phone.
 - A Live Activity on the lock screen.
 - The changes view.
 
@@ -84,6 +84,7 @@ Scan the code it shows, then leave with `Ctrl-b d`.
 | `agents.go` | The conversation of the agent a phone watches, a page at a time, answering what it asks, its commands, and pictures |
 | `attachments.go` | Putting a picture together from its parts, and checking it is one |
 | `notices.go` | Notifying phones when a session waits or finishes |
+| `sessions.go` | Opening and closing sessions from the phone |
 | `agent/` | Reading Claude Code's and Codex's logs, their hooks' input and their commands, as Farol on a Mac does |
 | `tmux.go` | Listing, reading and typing into sessions, and what their agent's hooks said |
 | `secure.go` | Pairing and the encryption, the same as the Swift package |

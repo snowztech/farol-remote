@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -53,6 +54,13 @@ func TestListsReadsAndTypesIntoARealSession(t *testing.T) {
 	}
 	if _, ok := tm.history(id); !ok {
 		t.Fatal("no history")
+	}
+	made, ok := tm.open(dir, "new.one", "echo opened")
+	if list := tm.sessions(); !ok || len(list) != 2 || !slices.ContainsFunc(list, func(s session) bool { return s.ID == made }) {
+		t.Fatalf("opened %v %v, sessions %+v", made, ok, list)
+	}
+	if !tm.close(made) || len(tm.sessions()) != 1 {
+		t.Fatal("not closed")
 	}
 	if !tm.press(id, "C-l") || tm.press(id, "C-Enter") {
 		t.Fatal("Control with a letter, and nothing else")

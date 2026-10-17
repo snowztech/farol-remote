@@ -19,6 +19,8 @@ type fakeTerminal struct {
 	typed []string
 	// What the hooks said of its agent.
 	agent agentState
+	// The sessions opened, as "folder name command", and closed.
+	opened, closed []string
 }
 
 const fakeSession = "11111111-2222-3333-4444-555555555555"
@@ -45,6 +47,18 @@ func (f *fakeTerminal) agentIn(id string) (agentState, bool) {
 }
 
 func (f *fakeTerminal) answered(id string) { f.agent.request = nil }
+
+const openedSession = "22222222-3333-4444-5555-666666666666"
+
+func (f *fakeTerminal) open(dir, name, command string) (string, bool) {
+	f.opened = append(f.opened, dir+" "+name+" "+command)
+	return openedSession, true
+}
+
+func (f *fakeTerminal) close(id string) bool {
+	f.closed = append(f.closed, id)
+	return id == fakeSession
+}
 
 func (f *fakeTerminal) paste(id, text string) bool {
 	if id == fakeSession {
@@ -314,7 +328,7 @@ func TestWhatTheHostCannotDoIsRefusedAndNotLeftUnanswered(t *testing.T) {
 	b.ready()
 	for id, c := range map[string]struct{ action, reason string }{
 		"newer":  {`{"rename":{}}`, "This machine does not know how to do that. Update farol-host on it."},
-		"task":   {`{"options":{}}`, "This machine cannot start tasks from the phone yet."},
+		"task":   {`{"task":{}}`, "This machine cannot start tasks from the phone yet."},
 		"closed": {send("00000000-0000-0000-0000-000000000000", "x"), "That session is closed."},
 	} {
 		same(t, b.ask(id, c.action), refusedEvent(id, c.reason))
@@ -577,5 +591,41 @@ func TestAForgottenPhoneIsNotNotified(t *testing.T) {
 	b.tick()
 	if len(b.pushes) != 0 {
 		t.Fatalf("asked %s", b.pushes)
+	}
+}
+
+func TestAPhoneOpensASessionOnlyInAProjectFromTheList(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.terminal.agent.folder = filepath.Join(t.TempDir(), "shelf.app")
+	home, _ := os.UserHomeDir()
+	told := b.ask("o", `{"options":{}}`)
+	if len(told) != 1 || !strings.Contains(told[0], `{"id":"`+b.terminal.agent.folder+`","name":"shelf.app"}`) || !strings.Contains(told[0], `{"id":"`+home+`","name":"Home"}`) {
+		t.Fatalf("told %v", told)
+	}
+	open := func(id, project string) []string {
+		return b.ask(id, fmt.Sprintf(`{"open":{"project":%q}}`, project))
+	}
+	same(t, open("new", b.terminal.agent.folder)[:1], openedEvent("new", openedSession))
+	// Sent again on a new connection, it is answered and not opened twice.
+	same(t, open("new", b.terminal.agent.folder), openedEvent("new", openedSession))
+	if len(b.terminal.opened) != 1 || b.terminal.opened[0] != b.terminal.agent.folder+" shelf-app " {
+		t.Fatalf("opened %q", b.terminal.opened)
+	}
+	same(t, open("elsewhere", "/etc"), refusedEvent("elsewhere", "This machine could not open that session. Pick the project again and retry."))
+	same(t, b.ask("agent", fmt.Sprintf(`{"open":{"project":%q,"agent":"/bin"}}`, home)), refusedEvent("agent", "This machine could not open that session. Pick the agent again and retry."))
+	if len(b.terminal.opened) != 1 {
+		t.Fatalf("opened %q", b.terminal.opened)
+	}
+}
+
+func TestAPhoneClosesASessionOnce(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	close := fmt.Sprintf(`{"close":{"session":%q}}`, fakeSession)
+	same(t, b.ask("c", close), doneEvent("c"))
+	same(t, b.ask("c", close), doneEvent("c"))
+	if len(b.terminal.closed) != 1 {
+		t.Fatalf("closed %v", b.terminal.closed)
 	}
 }
