@@ -3,10 +3,15 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
+
+	"github.com/snowztech/farol-remote/host/agent"
 )
 
 // A terminal is where the sessions run. The host only ever asks it these few things, which a test can answer without tmux.
@@ -16,12 +21,22 @@ type terminal interface {
 	screen(id string) (string, bool)
 	// history is what scrolled off the top, oldest first.
 	history(id string) (string, bool)
+	// agentIn is what the hooks of the agent in the session said of it. False when the session is gone.
+	agentIn(id string) (agentState, bool)
+	// answered forgets what the agent asked, once an answer is on its way, so a second tap is refused rather than typed into what it asks next.
+	answered(id string)
 	// paste puts text in whole and waits for a Return.
 	paste(id, text string) bool
 	// keys types text one key after the other.
 	keys(id, text string) bool
+	// open makes a session in a folder, named as asked when tmux takes the name, and types a command into its shell when there is one.
+	open(dir, name, command string) (string, bool)
+	close(id string) bool
 	press(id, key string) bool
 }
+
+// Control with a letter, as the host asks for it, in tmux's own words.
+var controlKey = regexp.MustCompile(`^C-[a-z]$`)
 
 // The names tmux gives the keys a phone can press.
 var tmuxKeys = map[string]string{
@@ -35,8 +50,21 @@ type tmux struct {
 	host []byte
 	// The tmux target of each session the phone was told about, by the id it was told.
 	targets map[string]string
+	// What the hooks said of each session's agent, as of the last look.
+	agents map[string]agentState
 	// The branch of each folder, asked of git every few seconds and not on every look.
 	branches map[string]branch
+}
+
+type agentState struct {
+	// Where the session's active pane is.
+	folder string
+	status string
+	log    string
+	// An agent runs there, from its start to its end.
+	started bool
+	// What it waits on you for, when its hook said.
+	request *agent.Request
 }
 
 type branch struct {
@@ -45,7 +73,7 @@ type branch struct {
 }
 
 func newTmux(host []byte) *tmux {
-	return &tmux{host: host, targets: map[string]string{}, branches: map[string]branch{}}
+	return &tmux{host: host, targets: map[string]string{}, agents: map[string]agentState{}, branches: map[string]branch{}}
 }
 
 func run(input string, name string, args ...string) (string, error) {
@@ -59,16 +87,18 @@ func run(input string, name string, args ...string) (string, error) {
 
 func (t *tmux) sessions() []session {
 	// No tmux server means no sessions, which tmux says as an error.
-	out, _ := run("", "tmux", "list-sessions", "-F", "#{session_id}\t#{session_created}\t#{pane_current_path}\t#{"+statusOption+"}\t#{session_name}")
-	list, targets := []session{}, map[string]string{}
+	out, _ := run("", "tmux", "list-sessions", "-F", "#{session_id}\t#{session_created}\t#{pane_current_path}\t#{"+statusOption+"}\t#{"+logOption+"}\t#{"+agentOption+"}\t#{"+requestOption+"}\t#{session_name}")
+	list, targets, agents := []session{}, map[string]string{}, map[string]agentState{}
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		fields := strings.SplitN(line, "\t", 5)
-		if len(fields) != 5 {
+		// The name is last, since it is the one field that may hold a tab.
+		fields := strings.SplitN(line, "\t", 8)
+		if len(fields) != 8 {
 			continue
 		}
 		id := sessionID(t.host, fields[0], fields[1])
 		targets[id] = fields[0] + ":"
-		one := session{ID: id, Name: fields[4], Status: "idle"}
+		agents[id] = agentState{folder: fields[2], status: fields[3], log: fields[4], started: fields[5] != "", request: readRequest(fields[6])}
+		one := session{ID: id, Name: fields[7], Status: "idle"}
 		if fields[3] != "" {
 			one.Status = fields[3]
 		}
@@ -77,7 +107,7 @@ func (t *tmux) sessions() []session {
 		}
 		list = append(list, one)
 	}
-	t.targets = targets
+	t.targets, t.agents = targets, agents
 	return list
 }
 
@@ -126,6 +156,49 @@ func (t *tmux) screen(id string) (string, bool) { return t.capture(id) }
 
 func (t *tmux) history(id string) (string, bool) { return t.capture(id, "-S", "-", "-E", "-1") }
 
+func (t *tmux) agentIn(id string) (agentState, bool) {
+	// Looked up as a target is, which reads the sessions again for one made since the last look.
+	_, ok := t.target(id)
+	return t.agents[strings.ToUpper(id)], ok
+}
+
+func (t *tmux) answered(id string) {
+	if target, ok := t.target(id); ok {
+		run("", "tmux", "set-option", "-u", "-t", target, requestOption)
+		agent := t.agents[strings.ToUpper(id)]
+		agent.request = nil
+		t.agents[strings.ToUpper(id)] = agent
+	}
+}
+
+func (t *tmux) open(dir, name, command string) (string, bool) {
+	made := []string{"new-session", "-d", "-P", "-F", "#{session_id}\t#{session_created}", "-c", dir}
+	out, err := run("", "tmux", append(made, "-s", name)...)
+	if err != nil {
+		// The name is taken, or is not one tmux takes. It picks one of its own.
+		out, err = run("", "tmux", made...)
+	}
+	tmuxID, created, ok := strings.Cut(strings.TrimSpace(out), "\t")
+	if err != nil || !ok {
+		return "", false
+	}
+	// Typed into the shell rather than run in its place, so the session stays when the agent ends, as a tab on the Mac does.
+	if command != "" {
+		run("", "tmux", "send-keys", "-t", tmuxID+":", "-l", "--", command)
+		run("", "tmux", "send-keys", "-t", tmuxID+":", "Enter")
+	}
+	return sessionID(t.host, tmuxID, created), true
+}
+
+func (t *tmux) close(id string) bool {
+	target, ok := t.target(id)
+	if !ok {
+		return false
+	}
+	_, err := run("", "tmux", "kill-session", "-t", target)
+	return err == nil
+}
+
 func (t *tmux) paste(id, text string) bool {
 	target, ok := t.target(id)
 	if !ok {
@@ -151,6 +224,9 @@ func (t *tmux) keys(id, text string) bool {
 func (t *tmux) press(id, key string) bool {
 	target, ok := t.target(id)
 	name, known := tmuxKeys[key]
+	if controlKey.MatchString(key) {
+		name, known = key, true
+	}
 	if !ok || !known {
 		return false
 	}
@@ -158,25 +234,80 @@ func (t *tmux) press(id, key string) bool {
 	return err == nil
 }
 
-// Where a session's status is kept: on the tmux session itself, so the host has nothing of its own to store or to lose.
-const statusOption = "@farol_status"
+// Where a session's agent is kept: on the tmux session itself, so the host has nothing of its own to store or to lose.
+const (
+	statusOption = "@farol_status"
+	// The file the agent logs its conversation to, as its hooks name it.
+	logOption = "@farol_log"
+	// Set while an agent runs, from its start to its end. Before its first message it may have no log, and a phone shows it as an empty conversation.
+	agentOption = "@farol_agent"
+	// What a waiting agent asks, as JSON in base64, which keeps it to one line of tmux's list.
+	requestOption = "@farol_request"
+)
+
+func writeRequest(request *agent.Request) string {
+	text, _ := json.Marshal(request)
+	return base64.StdEncoding.EncodeToString(text)
+}
+
+func readRequest(option string) *agent.Request {
+	text, err := base64.StdEncoding.DecodeString(option)
+	if err != nil || option == "" {
+		return nil
+	}
+	var request agent.Request
+	if json.Unmarshal(text, &request) != nil {
+		return nil
+	}
+	return &request
+}
 
 // What each word an agent's hook says leaves the session showing. Empty goes back to idle.
-var statuses = map[string]string{"working": "working", "waiting": "waiting", "done": "done", "clear": "", "subagent-start": "working"}
+var statuses = map[string]string{"working": "working", "waiting": "waiting", "done": "done", "clear": "", "start": "", "subagent-start": "working"}
 
-// setStatus is `farol-host status`, called by an agent's hooks from inside a session. pane is tmux's own name for where it runs.
-// False is for a word that is not one of the hooks'.
-func setStatus(pane, event string) bool {
+// setStatus is `farol-host status`, called by an agent's hooks from inside a session. pane is tmux's own name for where it runs,
+// and hook what the agent gave the hook on its input. False is for a word that is not one of the hooks'.
+func setStatus(pane, event string, hook []byte) bool {
 	status, known := statuses[event]
-	switch {
-	case event == "subagent-stop":
-		// ponytail: a background agent that stops leaves the status as it is. Counting them, as the Mac does, would keep it working until the last one ends.
-	case !known:
+	if !known && event != "subagent-stop" {
 		return false
-	case status == "":
-		run("", "tmux", "set-option", "-u", "-t", pane, statusOption)
+	}
+	// One tmux call for all of it, each command after a ";".
+	var args []string
+	set := func(option, value string) {
+		if value == "" {
+			args = append(args, "set-option", "-u", "-t", pane, option, ";")
+		} else {
+			args = append(args, "set-option", "-t", pane, option, value, ";")
+		}
+	}
+	// ponytail: a background agent that stops leaves the status as it is. Counting them, as the Mac does, would keep it working until the last one ends.
+	if event != "subagent-stop" {
+		set(statusOption, status)
+	}
+	switch log := agent.LogIn(hook); {
+	case log != "":
+		set(logOption, log)
+	case event == "start":
+		// A new agent that has not said where it logs yet. The conversation of the one before it is not this one's.
+		set(logOption, "")
+	}
+	switch event {
+	case "start":
+		set(agentOption, "1")
+	case "clear":
+		set(agentOption, "")
+	}
+	switch request := agent.RequestIn(hook); {
+	case event == "waiting" && request != nil:
+		set(requestOption, writeRequest(request))
+	case event == "waiting", strings.HasPrefix(event, "subagent-"):
+		// A notification that the agent still waits says nothing new, so what it asks is kept.
 	default:
-		run("", "tmux", "set-option", "-t", pane, statusOption, status)
+		set(requestOption, "")
+	}
+	if len(args) > 0 {
+		run("", "tmux", args[:len(args)-1]...)
 	}
 	return true
 }

@@ -1,22 +1,36 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/snowztech/farol-remote/host/agent"
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 // fakeTerminal is one session that remembers what was typed into it.
 type fakeTerminal struct {
 	typed []string
+	// What the hooks said of its agent.
+	agent agentState
+	// The sessions opened, as "folder name command", and closed.
+	opened, closed []string
 }
 
 const fakeSession = "11111111-2222-3333-4444-555555555555"
 
 func (f *fakeTerminal) sessions() []session {
-	return []session{{ID: fakeSession, Name: "demo", Status: "idle"}}
+	status := f.agent.status
+	if status == "" {
+		status = "idle"
+	}
+	return []session{{ID: fakeSession, Name: "demo", Status: status}}
 }
 
 func (f *fakeTerminal) screen(id string) (string, bool) {
@@ -24,6 +38,27 @@ func (f *fakeTerminal) screen(id string) (string, bool) {
 }
 
 func (f *fakeTerminal) history(id string) (string, bool) { return "earlier", id == fakeSession }
+
+func (f *fakeTerminal) agentIn(id string) (agentState, bool) {
+	if id != fakeSession {
+		return agentState{}, false
+	}
+	return f.agent, true
+}
+
+func (f *fakeTerminal) answered(id string) { f.agent.request = nil }
+
+const openedSession = "22222222-3333-4444-5555-666666666666"
+
+func (f *fakeTerminal) open(dir, name, command string) (string, bool) {
+	f.opened = append(f.opened, dir+" "+name+" "+command)
+	return openedSession, true
+}
+
+func (f *fakeTerminal) close(id string) bool {
+	f.closed = append(f.closed, id)
+	return id == fakeSession
+}
 
 func (f *fakeTerminal) paste(id, text string) bool {
 	if id == fakeSession {
@@ -49,6 +84,8 @@ type bench struct {
 	events  []string
 	refused string
 	paired  bool
+	// What the host asked the relay to have Apple show.
+	pushes [][]byte
 }
 
 func newBench(t *testing.T) *bench {
@@ -69,14 +106,33 @@ func newBench(t *testing.T) *bench {
 	return b
 }
 
-// toHost gives the host one frame as phone 1, then has the phone read every answer and reply to it.
+// toHost gives the host one frame as phone 1, then has the phone read the answers.
 func (b *bench) toHost(frame wireFrame) {
 	b.t.Helper()
 	payload, _ := json.Marshal(frame)
 	b.host.receive(toPhone(1, payload))
+	b.read()
+}
+
+// tick has the host look again, as it does a few times a second, and returns what the phone was told.
+func (b *bench) tick() []string {
+	b.t.Helper()
+	before := len(b.events)
+	b.host.tick()
+	b.read()
+	return b.events[before:]
+}
+
+// read has the phone read every answer and reply to it.
+func (b *bench) read() {
+	b.t.Helper()
 	for len(b.inbox) > 0 {
 		message := b.inbox[0]
 		b.inbox = b.inbox[1:]
+		if message[0] == framePush {
+			b.pushes = append(b.pushes, message[1:])
+			continue
+		}
 		var answer wireFrame
 		if err := json.Unmarshal(message[5:], &answer); err != nil {
 			b.t.Fatal(err)
@@ -209,12 +265,34 @@ func TestAPhoneThatNeverPairedIsTurnedAway(t *testing.T) {
 func TestWatchingASessionShowsItsScreenAndTypingChangesIt(t *testing.T) {
 	b := newBench(t)
 	b.ready()
-	same(t, b.ask("w", watch(fakeSession)), screenEvent(fakeSession, "typed: "))
+	same(t, b.ask("w", watch(fakeSession)), requestEvent(fakeSession, nil), screenEvent(fakeSession, "typed: "))
 	same(t, b.ask("s", send(fakeSession, "yes")), doneEvent("s"), screenEvent(fakeSession, "typed: yes"))
 	b.ask("k", fmt.Sprintf(`{"key":{"session":%q,"key":"enter"}}`, fakeSession))
 	same(t, b.ask("h", fmt.Sprintf(`{"history":{"session":%q}}`, fakeSession)), historyEvent(fakeSession, "earlier"))
-	if got := strings.Join(b.terminal.typed, ","); got != "yes,<enter>" {
+	typed := func() string {
+		b.host.mu.Lock()
+		defer b.host.mu.Unlock()
+		return strings.Join(b.terminal.typed, ",")
+	}
+	// Return after a paste waits for the agent to take it in.
+	if got := typed(); got != "yes" {
 		t.Fatalf("typed %s", got)
+	}
+	time.Sleep(returnDelay("yes", 0) + 100*time.Millisecond)
+	if got := typed(); got != "yes,<enter>" {
+		t.Fatalf("typed %s", got)
+	}
+}
+
+func TestReturnWaitsLongerAfterALongerPaste(t *testing.T) {
+	if returnDelay("fix it", 0) != 400*time.Millisecond || returnDelay("a\nb\nc", 0) <= returnDelay("a", 0) {
+		t.Fatal("the wait does not follow the lines")
+	}
+	if returnDelay(strings.Repeat("line\n", 500), 0) != returnDelay(strings.Repeat("line\n", 7)+"line", 0) {
+		t.Fatal("a whole log waits longer than a few screens")
+	}
+	if returnDelay("a\nb\nc", 5*time.Second) != 0 {
+		t.Fatal("waited after a paste long ago")
 	}
 }
 
@@ -250,7 +328,7 @@ func TestWhatTheHostCannotDoIsRefusedAndNotLeftUnanswered(t *testing.T) {
 	b.ready()
 	for id, c := range map[string]struct{ action, reason string }{
 		"newer":  {`{"rename":{}}`, "This machine does not know how to do that. Update farol-host on it."},
-		"task":   {`{"options":{}}`, "This machine cannot start tasks from the phone yet."},
+		"task":   {`{"task":{}}`, "This machine cannot start tasks from the phone yet."},
 		"closed": {send("00000000-0000-0000-0000-000000000000", "x"), "That session is closed."},
 	} {
 		same(t, b.ask(id, c.action), refusedEvent(id, c.reason))
@@ -288,5 +366,331 @@ func TestASessionKeepsItsIdAndANewOneGetsAnother(t *testing.T) {
 	}
 	if len(first) != 36 || first != strings.ToUpper(first) {
 		t.Fatalf("not an id a phone reads: %s", first)
+	}
+}
+
+// prompt is a line of Claude Code's log where you said something, after the line before it.
+func prompt(id, parent, text string) string {
+	if parent == "" {
+		return fmt.Sprintf(`{"parentUuid":null,"type":"user","uuid":%q,"message":{"role":"user","content":%q}}`+"\n", id, text)
+	}
+	return fmt.Sprintf(`{"parentUuid":%q,"type":"user","uuid":%q,"message":{"role":"user","content":%q}}`+"\n", parent, id, text)
+}
+
+func (b *bench) writeLog(text string) {
+	b.t.Helper()
+	if b.terminal.agent.log == "" {
+		b.terminal.agent.log = filepath.Join(b.t.TempDir(), "log.jsonl")
+	}
+	file, err := os.OpenFile(b.terminal.agent.log, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		b.t.Fatal(err)
+	}
+	defer file.Close()
+	file.WriteString(text)
+}
+
+func conversation(before string) string {
+	if before == "" {
+		return fmt.Sprintf(`{"conversation":{"session":%q}}`, fakeSession)
+	}
+	return fmt.Sprintf(`{"conversation":{"session":%q,"before":%q}}`, fakeSession, before)
+}
+
+func TestAPhoneReadsTheConversationAndThenWhatTheAgentWrites(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.writeLog(prompt("p1", "", "fix the test"))
+	b.ask("w", watch(fakeSession))
+	// Watching shows it at once, since the log is known.
+	first := []agent.Message{{ID: "p1.0", Role: agent.You, Text: "fix the test"}}
+	same(t, b.ask("c", conversation("")), conversationEvent(fakeSession, first, latest, false))
+
+	b.writeLog(prompt("p2", "p1", "and the docs"))
+	same(t, b.tick(), conversationEvent(fakeSession, []agent.Message{{ID: "p2.0", Role: agent.You, Text: "and the docs"}}, placeAfter("p1.0"), false))
+	if told := b.tick(); len(told) != 0 {
+		t.Fatalf("told again %v", told)
+	}
+}
+
+func TestAPhoneWatchingAnAgentThatJustStartedSeesAnEmptyConversationThenItsLog(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.terminal.agent.started = true
+	same(t, b.ask("w", watch(fakeSession)), conversationEvent(fakeSession, nil, latest, false), requestEvent(fakeSession, nil), screenEvent(fakeSession, "typed: "))
+	if told := b.tick(); len(told) != 0 {
+		t.Fatalf("told again %v", told)
+	}
+	b.writeLog(prompt("p1", "", "hello"))
+	same(t, b.tick(), conversationEvent(fakeSession, []agent.Message{{ID: "p1.0", Role: agent.You, Text: "hello"}}, latest, false))
+}
+
+func TestAPhoneAsksForEarlierPages(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	parent := ""
+	for i := range 70 {
+		id := fmt.Sprintf("p%d", i)
+		b.writeLog(prompt(id, parent, id))
+		parent = id
+	}
+	told := b.ask("c", conversation(""))
+	var latestPage struct {
+		Conversation struct {
+			Messages []agent.Message
+			More     bool
+		}
+	}
+	json.Unmarshal([]byte(told[0]), &latestPage)
+	if got := latestPage.Conversation; len(got.Messages) != 60 || !got.More || got.Messages[0].ID != "p10.0" {
+		t.Fatalf("the latest page has %d messages from %s", len(got.Messages), got.Messages[0].ID)
+	}
+	told = b.ask("e", conversation("p10.0"))
+	if !strings.Contains(told[0], `"place":{"before":{"_0":"p10.0"}}`) || !strings.Contains(told[0], `"more":false`) || strings.Count(told[0], `"role"`) != 10 {
+		t.Fatalf("the page before: %s", told[0])
+	}
+	same(t, b.ask("gone", conversation("rewound")), refusedEvent("gone", "That part of the conversation was rewound."))
+}
+
+func TestASessionWithoutAnAgentHasNoConversation(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	same(t, b.ask("c", conversation("")), refusedEvent("c", "This session has no agent conversation to show."))
+}
+
+func answer(session, request string, choice int) string {
+	return fmt.Sprintf(`{"answer":{"session":%q,"request":%q,"choice":%d}}`, session, request, choice)
+}
+
+func TestAPhoneAnswersWhatTheAgentAsksOnce(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	asked := &agent.Request{ID: "toolu_1", Title: "Which database?", Choices: []agent.Choice{{Label: "SQLite"}, {Label: "Postgres"}}}
+	b.terminal.agent = agentState{status: "waiting", started: true, request: asked}
+	same(t, b.ask("w", watch(fakeSession)), sessionsEvent(b.terminal.sessions()), conversationEvent(fakeSession, nil, latest, false), requestEvent(fakeSession, asked), screenEvent(fakeSession, "typed: "))
+
+	same(t, b.ask("a", answer(fakeSession, "toolu_1", 2)), doneEvent("a"), requestEvent(fakeSession, nil), screenEvent(fakeSession, "typed: 2"))
+	// A second tap, before the agent moved on, is not typed into what it asks next.
+	same(t, b.ask("again", answer(fakeSession, "toolu_1", 1)), refusedEvent("again", "That was already answered."))
+	// The same tap sent again on a new connection is answered, and typed once.
+	same(t, b.ask("a", answer(fakeSession, "toolu_1", 2)), doneEvent("a"))
+	if got := strings.Join(b.terminal.typed, ","); got != "2" {
+		t.Fatalf("typed %s", got)
+	}
+}
+
+func TestAnAgentThatMovedOnTakesNoAnswer(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.terminal.agent = agentState{status: "working", request: &agent.Request{ID: "toolu_1", Choices: []agent.Choice{}}}
+	same(t, b.ask("a", answer(fakeSession, "toolu_1", 1)), refusedEvent("a", "That was already answered."))
+	if len(b.terminal.typed) != 0 {
+		t.Fatalf("typed %v", b.terminal.typed)
+	}
+}
+
+func TestAPhoneAsksWhatTheAgentTakesAfterASlash(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	told := b.ask("c", fmt.Sprintf(`{"commands":{"session":%q}}`, fakeSession))
+	if len(told) != 1 || !strings.Contains(told[0], `"name":"compact"`) {
+		t.Fatalf("told %v", told)
+	}
+	same(t, b.ask("gone", `{"commands":{"session":"00000000-0000-0000-0000-000000000000"}}`), refusedEvent("gone", "That session is closed."))
+}
+
+func TestAPictureArrivesInPartsAndItsPathGoesBack(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.host.pictures = testInbox(t)
+	part := func(id string, n int, data []byte) []string {
+		encoded, _ := json.Marshal(data)
+		return b.ask(id, fmt.Sprintf(`{"attach":{"session":%q,"attachment":%q,"part":%d,"parts":2,"data":%s}}`, fakeSession, picture, n, encoded))
+	}
+	same(t, part("p0", 0, png[:4]), doneEvent("p0"))
+	told := part("p1", 1, png[4:])
+	same(t, told, attachedEvent("p1", picture, filepath.Join(b.host.pictures.folder, picture+".png")))
+}
+
+func TestReturnWaitsForTheAgentToOpenAPicture(t *testing.T) {
+	reply := "/home/me/.cache/Farol/Attachments/" + picture + ".png\nwhat is off here?"
+	if returnDelay(reply, 0) < returnDelay("one\ntwo", 0)+500*time.Millisecond {
+		t.Fatal("a picture gives the agent no more time")
+	}
+}
+
+func TestAPhoneReadingTheConversationGetsTheScreenOnlyWithTheTerminalOpen(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.ask("t", fmt.Sprintf(`{"terminal":{"session":%q,"open":false}}`, fakeSession))
+	b.ask("w", watch(fakeSession))
+	b.ask("s", send(fakeSession, "x"))
+	if told := b.tick(); len(told) != 0 {
+		t.Fatalf("told %v", told)
+	}
+	same(t, b.ask("o", fmt.Sprintf(`{"terminal":{"session":%q,"open":true}}`, fakeSession)), screenEvent(fakeSession, "typed: x"))
+	// Faster while it is open.
+	start := time.Now()
+	b.host.due(start)
+	if b.host.due(start.Add(100*time.Millisecond)) || !b.host.due(start.Add(130*time.Millisecond)) {
+		t.Fatal("not paced for a terminal")
+	}
+}
+
+func TestControlTakesALetterOnly(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	same(t, b.ask("c", fmt.Sprintf(`{"control":{"session":%q,"key":"c"}}`, fakeSession)), doneEvent("c"))
+	same(t, b.ask("bad", fmt.Sprintf(`{"control":{"session":%q,"key":"Enter"}}`, fakeSession)), refusedEvent("bad", "Only Control with a letter can be sent."))
+	if got := strings.Join(b.terminal.typed, ","); got != "<C-c>" {
+		t.Fatalf("typed %s", got)
+	}
+}
+
+func TestAPhoneIsNotifiedWhenASessionWaitsEvenWithNoPhoneConnected(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	key := make([]byte, 32)
+	b.ask("n", `{"notify":{"token":"q80=","sandbox":true,"notices":["waiting"],"key":"`+base64.StdEncoding.EncodeToString(key)+`"}}`)
+	// The phone goes, as when the app is closed.
+	b.host.phones = map[uint32]*phone{}
+	b.tick()
+	b.terminal.agent.status = "working"
+	b.tick()
+	b.terminal.agent.status = "waiting"
+	b.tick()
+	b.terminal.agent.status = "done"
+	b.tick()
+	if len(b.pushes) != 1 {
+		t.Fatalf("asked for %d notifications", len(b.pushes))
+	}
+	var request map[string]string
+	json.Unmarshal(b.pushes[0], &request)
+	if request["token"] != "abcd" || request["notice"] != "waiting" || request["sandbox"] != "1" {
+		t.Fatalf("asked %v", request)
+	}
+	sealed, _ := base64.StdEncoding.DecodeString(request["sealed"])
+	aead, _ := chacha20poly1305.New(key)
+	plain, err := aead.Open(nil, sealed[:12], sealed[12:], nil)
+	if err != nil || string(plain) != `{"name":"demo","notice":"waiting","session":"`+fakeSession+`"}` {
+		t.Fatalf("sealed %s %v", plain, err)
+	}
+	// Kept for the next time the host starts.
+	if targets := b.host.store.pushTargets(); len(targets) != 1 || targets[0].Notices[0] != "waiting" {
+		t.Fatalf("kept %+v", targets)
+	}
+}
+
+func TestAForgottenPhoneIsNotNotified(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.ask("n", `{"notify":{"token":"q80=","sandbox":false}}`)
+	b.host.store.saveDevices(nil)
+	b.tick()
+	b.terminal.agent.status = "waiting"
+	b.tick()
+	if len(b.pushes) != 0 {
+		t.Fatalf("asked %s", b.pushes)
+	}
+}
+
+func TestAPhoneOpensASessionOnlyInAProjectFromTheList(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.terminal.agent.folder = filepath.Join(t.TempDir(), "shelf.app")
+	home, _ := os.UserHomeDir()
+	told := b.ask("o", `{"options":{}}`)
+	if len(told) != 1 || !strings.Contains(told[0], `{"id":"`+b.terminal.agent.folder+`","name":"shelf.app"}`) || !strings.Contains(told[0], `{"id":"`+home+`","name":"Home"}`) {
+		t.Fatalf("told %v", told)
+	}
+	open := func(id, project string) []string {
+		return b.ask(id, fmt.Sprintf(`{"open":{"project":%q}}`, project))
+	}
+	same(t, open("new", b.terminal.agent.folder)[:1], openedEvent("new", openedSession))
+	// Sent again on a new connection, it is answered and not opened twice.
+	same(t, open("new", b.terminal.agent.folder), openedEvent("new", openedSession))
+	if len(b.terminal.opened) != 1 || b.terminal.opened[0] != b.terminal.agent.folder+" shelf-app " {
+		t.Fatalf("opened %q", b.terminal.opened)
+	}
+	same(t, open("elsewhere", "/etc"), refusedEvent("elsewhere", "This machine could not open that session. Pick the project again and retry."))
+	same(t, b.ask("agent", fmt.Sprintf(`{"open":{"project":%q,"agent":"/bin"}}`, home)), refusedEvent("agent", "This machine could not open that session. Pick the agent again and retry."))
+	if len(b.terminal.opened) != 1 {
+		t.Fatalf("opened %q", b.terminal.opened)
+	}
+}
+
+func TestAPhoneClosesASessionOnce(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	close := fmt.Sprintf(`{"close":{"session":%q}}`, fakeSession)
+	same(t, b.ask("c", close), doneEvent("c"))
+	same(t, b.ask("c", close), doneEvent("c"))
+	if len(b.terminal.closed) != 1 {
+		t.Fatalf("closed %v", b.terminal.closed)
+	}
+}
+
+// activities are the Live Activity frames the host asked the relay for, read back.
+func (b *bench) activities() []map[string]any {
+	var list []map[string]any
+	for _, push := range b.pushes {
+		var request map[string]any
+		json.Unmarshal(push, &request)
+		if request["activity"] != nil {
+			list = append(list, request)
+		}
+	}
+	return list
+}
+
+func TestALiveActivityStartsOnAClosedPhoneWhenSomethingGetsBusy(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	key := make([]byte, 32)
+	b.ask("n", `{"notify":{"token":"q80=","sandbox":false,"key":"`+base64.StdEncoding.EncodeToString(key)+`","starts":"7+8="}}`)
+	b.tick()
+	b.terminal.agent.status = "working"
+	b.tick()
+	if len(b.activities()) != 0 {
+		t.Fatal("started on a phone that has the app open")
+	}
+	b.host.phones = map[uint32]*phone{}
+	b.terminal.agent.status = "waiting"
+	b.tick()
+	b.terminal.agent.status = "working"
+	b.tick()
+	started := b.activities()
+	if len(started) != 1 || started[0]["token"] != "efef" || started[0]["activity"] != "start" || started[0]["urgent"] != true || started[0]["waiting"] != 1.0 {
+		t.Fatalf("asked %v", started)
+	}
+	sealed, _ := base64.StdEncoding.DecodeString(started[0]["sealed"].(string))
+	aead, _ := chacha20poly1305.New(key)
+	plain, err := aead.Open(nil, sealed[:12], sealed[12:], nil)
+	if err != nil || string(plain) != `[{"id":"`+fakeSession+`","name":"demo","status":"waiting"}]` {
+		t.Fatalf("sealed %s %v", plain, err)
+	}
+}
+
+func TestALiveActivityFollowsTheSessionsAndEndsWhenAllIsQuiet(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.tick()
+	b.ask("a", `{"activity":{"token":"q80=","sandbox":true}}`)
+	b.terminal.agent.status = "working"
+	b.tick()
+	b.terminal.agent.status = "waiting"
+	b.tick()
+	b.tick()
+	b.terminal.agent.status = "done"
+	b.tick()
+	var events []string
+	for _, a := range b.activities() {
+		events = append(events, fmt.Sprintf("%s %v %v", a["activity"], a["waiting"], a["urgent"]))
+	}
+	if got := strings.Join(events, ", "); got != "update 0 false, update 1 true, end 0 false" {
+		t.Fatalf("asked %s", got)
+	}
+	if len(b.host.store.activityTargets()) != 0 {
+		t.Fatal("an ended activity is still followed")
 	}
 }

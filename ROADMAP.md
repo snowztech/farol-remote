@@ -3,7 +3,7 @@
 Remote comes first, with Farol on the Mac as the host. The rest waits until people use it.
 
 1. **Remote.** Pair an iPhone with Farol on the Mac, read and answer sessions, and get told when an agent waits or finishes. The Mac stays on.
-2. **Host.** `farol-host` runs agents on a machine of your own that stays on, so the Mac can be closed or off. The phone already keeps a list of named hosts, so adding a server never replaces the Mac, and each host says what it can do, so the phone shows only that. Before it leaves experimental, it does what Farol on the Mac does for agents, and the pairing and the encryption have had an outside review.
+2. **Host.** `farol-host` runs agents on a machine of your own that stays on, so the Mac can be closed or off. The phone already keeps a list of named hosts, so adding a server never replaces the Mac, and each host says what it can do, so the phone shows only that. It does what Farol on the Mac does from the phone: conversations, approvals and questions, commands, pictures, the terminal, notifications and the Live Activity, new sessions, and changes. Before it leaves experimental, it starts tasks in a new worktree, and the pairing and the encryption have had an outside review.
 3. **Other phones.** A web client, for Android and anything with a browser, if people ask for it. It would check itself against the same sample messages the Swift and Go code already share.
 
 A service that runs agents for you is not planned. Claude Code and Codex already run in their own clouds.

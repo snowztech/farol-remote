@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/url"
 	"os"
@@ -27,8 +28,9 @@ The Farol Remote CLI, for a machine that stays on. It lets a paired phone see an
   pair            Show a code to scan from Farol on a phone. farol-host has to be running.
   devices         List the phones this machine lets in.
   forget <name>   Stop letting a phone in.
-  status <word>   Say what the agent in this session is doing: working, waiting, done or clear.
-                  An agent's hooks call it. Outside tmux it does nothing, so the hooks are safe anywhere.
+  status <word>   Say what the agent in this session is doing: start, working, waiting, done or clear.
+                  An agent's hooks call it, with what the agent gave the hook on its input.
+                  Outside tmux it does nothing, so the hooks are safe anywhere.
   version         Say which release this is. So do --version and -v.
 `
 
@@ -59,7 +61,7 @@ func main() {
 			os.Exit(64)
 		}
 		if pane := os.Getenv("TMUX_PANE"); pane != "" {
-			setStatus(pane, flag.Arg(1))
+			setStatus(pane, flag.Arg(1), hookInput())
 		}
 		return
 	}
@@ -111,6 +113,26 @@ func main() {
 	default:
 		flag.Usage()
 		os.Exit(64)
+	}
+}
+
+// hookInput is what an agent gave its hook on its input, which Claude Code and Codex write as JSON and close.
+// A terminal or an input left open is never waited on for more than a moment, since a hook must not hold the agent up.
+func hookInput() []byte {
+	if info, err := os.Stdin.Stat(); err != nil || info.Mode()&os.ModeCharDevice != 0 {
+		return nil
+	}
+	read := make(chan []byte, 1)
+	go func() {
+		// An approval for a large file carries the whole file.
+		input, _ := io.ReadAll(io.LimitReader(os.Stdin, 16<<20))
+		read <- input
+	}()
+	select {
+	case input := <-read:
+		return input
+	case <-time.After(300 * time.Millisecond):
+		return nil
 	}
 }
 
@@ -191,7 +213,7 @@ func connect(h *host, address string) error {
 	log.Print("connected to the relay")
 
 	go func() {
-		look, ping := time.NewTicker(500*time.Millisecond), time.NewTicker(20*time.Second)
+		look, ping := time.NewTicker(40*time.Millisecond), time.NewTicker(20*time.Second)
 		defer look.Stop()
 		defer ping.Stop()
 		for {
@@ -199,7 +221,9 @@ func connect(h *host, address string) error {
 			case <-ctx.Done():
 				return
 			case <-look.C:
-				h.tick()
+				if h.due(time.Now()) {
+					h.tick()
+				}
 			case <-ping.C:
 				// A connection that died without saying so reads nothing and fails nothing. A ping with no answer is how we learn.
 				waiting, done := context.WithTimeout(ctx, 10*time.Second)

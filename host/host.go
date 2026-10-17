@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/snowztech/farol-remote/host/agent"
 )
 
 // A host is this machine as a paired phone sees it: the part a Mac running Farol plays, with tmux in place of the app.
@@ -23,6 +25,25 @@ type host struct {
 	phones map[uint32]*phone
 	// The commands each device already had carried out, kept across its connections, since a phone sends again on a new one.
 	seen map[string]*seenCommands
+	// The agents' logs, read where they were left.
+	transcripts map[string]*agent.Transcript
+	// The last paste from a phone into each session, until the Return that sends it.
+	pasted map[string]paste
+	// Pictures from phones. Made the first time one comes.
+	pictures *inbox
+	// The session each `open` made, so one a phone sends again after a dropped connection is answered and not opened twice.
+	opened map[string]string
+	// When phones were last sent what changed.
+	looked time.Time
+	// What each session was doing at the last look, to notify phones of a change. Nil before the first.
+	statuses map[string]string
+	// Phones sent a Live Activity start and not yet the started activity's address. Another start would only stack a second one.
+	starting map[string]bool
+}
+
+type paste struct {
+	text string
+	at   time.Time
 }
 
 // One phone's connection, by the number the relay gave it.
@@ -37,10 +58,20 @@ type phone struct {
 	// What it was last sent, so only a change is sent again.
 	sessions []byte
 	screen   *string
+	reading  *reading
+	// It said when it shows a terminal, so its screen goes only then. An older phone never says, and always gets it.
+	saysTerminal bool
+	// The session whose terminal it shows.
+	terminal string
+	// What it was last told the watched session waits on. Nil until told, so it is always told once, even that it waits on nothing.
+	request []byte
+	// The session it was told is an empty conversation, an agent started there with no log yet, so it is told once.
+	toldEmpty string
 }
 
 func newHost(key deviceKey, store store, terminal terminal) *host {
-	return &host{key: key, store: store, terminal: terminal, send: func([]byte) {}, phones: map[uint32]*phone{}, seen: map[string]*seenCommands{}}
+	return &host{key: key, store: store, terminal: terminal, send: func([]byte) {}, phones: map[uint32]*phone{}, seen: map[string]*seenCommands{},
+		transcripts: map[string]*agent.Transcript{}, pasted: map[string]paste{}, opened: map[string]string{}, starting: map[string]bool{}}
 }
 
 // connected is called with each new connection to the relay, which numbers the phones again.
@@ -156,21 +187,62 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 	case !p.greeted:
 		// Nothing is done for a phone before both sides know they speak the same version.
 	case a.Watch != nil:
-		p.watching, p.screen = a.Watch.Session, nil
+		p.watching, p.screen, p.reading, p.toldEmpty, p.request = a.Watch.Session, nil, nil, "", nil
 		h.refresh()
+	case a.Conversation != nil:
+		h.conversation(id, p, c.ID, a.Conversation.Session, a.Conversation.Before)
+	case a.Answer != nil:
+		h.answer(id, p, c.ID, a.Answer.Session, a.Answer.Request, a.Answer.Choice)
+	case a.Terminal != nil:
+		p.saysTerminal, p.screen = true, nil
+		if a.Terminal.Open {
+			p.terminal = a.Terminal.Session
+		} else if p.terminal == a.Terminal.Session {
+			p.terminal = ""
+		}
+		h.refresh()
+	case a.Control != nil:
+		key := a.Control.Key
+		if len(key) != 1 || key[0] < 'a' || key[0] > 'z' {
+			h.tell(id, p, refusedEvent(c.ID, "Only Control with a letter can be sent."))
+			return
+		}
+		h.act(id, p, c.ID, func() bool { return h.terminal.press(a.Control.Session, "C-"+key) })
+	case a.Commands != nil:
+		h.commands(id, p, c.ID, a.Commands.Session)
+	case a.Attach != nil:
+		h.attach(id, p, c.ID, a.Attach.Session, a.Attach.Attachment, a.Attach.Part, a.Attach.Parts, a.Attach.Data)
 	case a.Notify != nil:
-		// Where to notify this phone, which this host does not do yet.
+		n := a.Notify
+		if err := h.store.savePushTarget(pushTarget{Device: p.device.Key, Token: n.Token, Sandbox: n.Sandbox, Notices: n.Notices, Key: n.Key, Starts: n.Starts}); err != nil {
+			log.Printf("where to notify %q could not be kept: %v", p.device.Name, err)
+		}
+	case a.Activity != nil:
+		h.activityStarted(p.device.Key, a.Activity.Token, a.Activity.Sandbox, h.terminal.sessions())
 	case a.History != nil:
 		if text, ok := h.terminal.history(a.History.Session); ok {
 			h.tell(id, p, historyEvent(a.History.Session, lastLines(text, maxHistory)))
 		}
 	case a.Send != nil:
-		h.act(id, p, c.ID, func() bool { return h.terminal.paste(a.Send.Session, a.Send.Text) })
+		h.act(id, p, c.ID, func() bool {
+			h.pasted[a.Send.Session] = paste{a.Send.Text, time.Now()}
+			return h.terminal.paste(a.Send.Session, a.Send.Text)
+		})
 	case a.Type != nil:
 		h.act(id, p, c.ID, func() bool { return h.terminal.keys(a.Type.Session, a.Type.Text) })
 	case a.Key != nil:
-		h.act(id, p, c.ID, func() bool { return h.terminal.press(a.Key.Session, a.Key.Key) })
-	case a.Options != nil || a.Task != nil:
+		h.act(id, p, c.ID, func() bool { return h.press(a.Key.Session, a.Key.Key) })
+	case a.Options != nil:
+		h.options(id, p)
+	case a.Open != nil:
+		h.open(id, p, c.ID, a.Open.Project, a.Open.Agent)
+	case a.Close != nil:
+		h.close(id, p, c.ID, a.Close.Session)
+	case a.Changes != nil:
+		h.changes(id, p, c.ID, a.Changes.Session)
+	case a.Diff != nil:
+		h.diff(id, p, c.ID, a.Diff.Session, a.Diff.Path)
+	case a.Task != nil:
 		h.tell(id, p, refusedEvent(c.ID, "This machine cannot start tasks from the phone yet."))
 	case c.ID != "":
 		// One that opens and does not read is from a newer phone. It is told so, so it does not wait for an answer.
@@ -180,12 +252,7 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 
 // act types into a session once, however many times the command arrives.
 func (h *host) act(id uint32, p *phone, command string, do func() bool) {
-	seen := h.seen[string(p.device.Key)]
-	if seen == nil {
-		seen = &seenCommands{ids: map[string]bool{}}
-		h.seen[string(p.device.Key)] = seen
-	}
-	if seen.insert(command) && !do() {
+	if h.seenBy(p).insert(command) && !do() {
 		h.tell(id, p, refusedEvent(command, "That session is closed."))
 		return
 	}
@@ -193,11 +260,72 @@ func (h *host) act(id uint32, p *phone, command string, do func() bool) {
 	h.refresh()
 }
 
-// tick is called a few times a second. It does nothing while no phone is connected.
+// seenBy is what the phone's device already had carried out.
+func (h *host) seenBy(p *phone) *seenCommands {
+	seen := h.seen[string(p.device.Key)]
+	if seen == nil {
+		seen = &seenCommands{ids: map[string]bool{}}
+		h.seen[string(p.device.Key)] = seen
+	}
+	return seen
+}
+
+// press presses a key. Return right after a paste waits for the agent to take the paste in, or it is lost and the reply stays unsent.
+func (h *host) press(session, key string) bool {
+	pasted, ok := h.pasted[session]
+	if key != "enter" || !ok {
+		return h.terminal.press(session, key)
+	}
+	delete(h.pasted, session)
+	time.AfterFunc(returnDelay(pasted.text, time.Since(pasted.at)), func() {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		h.terminal.press(session, key)
+	})
+	return true
+}
+
+// returnDelay is how long Return waits after a paste. An agent takes a paste in as a whole and opens any picture named in it,
+// and a Return that comes meanwhile is lost. More lines take longer, up to a few screens' worth, and a picture much longer.
+func returnDelay(text string, elapsed time.Duration) time.Duration {
+	lines := strings.Split(text, "\n")
+	pictures := 0
+	for _, line := range lines {
+		if strings.Contains(line, "/Farol/Attachments/") {
+			pictures++
+		}
+	}
+	settle := 250*time.Millisecond + time.Duration(min(len(lines), 8))*150*time.Millisecond + time.Duration(min(pictures, 4))*600*time.Millisecond
+	return max(0, settle-elapsed)
+}
+
+// due says when to look again: often while a phone shows a terminal, so typing there feels live, and less the rest of the time.
+func (h *host) due(now time.Time) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	// Without a phone it only looks for a session to notify of.
+	every := time.Second
+	if len(h.phones) > 0 {
+		every = 400 * time.Millisecond
+	}
+	for _, p := range h.phones {
+		if p.terminal != "" {
+			every = 120 * time.Millisecond
+		}
+	}
+	if now.Sub(h.looked) < every {
+		return false
+	}
+	h.looked = now
+	return true
+}
+
+// tick looks again, as often as due says. Without a phone connected, only for a notification to send.
 func (h *host) tick() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if len(h.phones) == 0 {
+		h.notice(h.terminal.sessions())
 		return
 	}
 	// A phone removed with `farol-host forget` is cut off at once, and not at its next connection.
@@ -210,7 +338,8 @@ func (h *host) tick() {
 	h.refresh()
 }
 
-// refresh sends each phone what changed: the list, and the screen of the session it has open. Always in full.
+// refresh sends each phone what changed: the list, and the conversation and screen of the session it has open.
+// The list and the screen go in full, so a phone that missed one has nothing to replay.
 func (h *host) refresh() {
 	var list []byte
 	for id, p := range h.phones {
@@ -218,13 +347,21 @@ func (h *host) refresh() {
 			continue
 		}
 		if list == nil {
-			list = sessionsEvent(h.terminal.sessions())
+			sessions := h.terminal.sessions()
+			h.notice(sessions)
+			list = sessionsEvent(sessions)
 		}
 		if !bytes.Equal(list, p.sessions) {
 			p.sessions = list
 			h.tell(id, p, list)
 		}
 		if p.watching == "" {
+			continue
+		}
+		h.follow(id, p)
+		h.tellRequest(id, p)
+		// A phone reading the conversation needs the screen only for a question the hooks did not describe.
+		if asked, _ := h.terminal.agentIn(p.watching); p.saysTerminal && p.terminal != p.watching && asked.status != "waiting" {
 			continue
 		}
 		text, ok := h.terminal.screen(p.watching)

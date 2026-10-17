@@ -182,8 +182,91 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     #expect(old == .hello(version: 1))
 }
 
-@Test func farolHostsHelloReadsAsAHostThatDoesNoMore() throws {
-    // What `farol-host` writes, as in host/testdata/swift.json.
-    let hello = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1,"features":[],"name":"host"}}"#.utf8))
-    #expect(hello == .hello(version: 1, features: [], name: "host"))
+@Test func farolHostsHelloReadsAsAHostThatDoesWhatAMacDoesForAgents() throws {
+    // What `farol-host` writes, as its host/swift_test.go checks.
+    let hello = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1,"features":["conversation","requests","commands","attachments","terminal","notifications","sessions","changes"],"name":"host"}}"#.utf8))
+    #expect(hello == .hello(version: 1, features: ["conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions", "changes"], name: "host"))
+    // Everything a Mac does.
+    #expect(RemoteFeature.of(["conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions", "changes"]) == Set(RemoteFeature.allCases))
+}
+
+@Test func farolHostsChangesRead() throws {
+    let session = try #require(UUID(uuidString: "11111111-2222-3333-4444-555555555555"))
+    let decode = { (text: String) in try JSONDecoder().decode(RemoteEvent.self, from: Data(text.utf8)) }
+    let changes = try decode(#"{"changes":{"session":"11111111-2222-3333-4444-555555555555","scope":"Since main","files":[{"path":"a.txt","status":"modified","added":2,"removed":1,"binary":false},{"path":"new name.txt","oldPath":"old name.txt","status":"renamed","added":0,"removed":0,"binary":false}]}}"#)
+    #expect(changes == .changes(session: session, scope: "Since main", files: [RemoteChange(path: "a.txt", status: .modified, added: 2, removed: 1),
+                                                                             RemoteChange(path: "new name.txt", oldPath: "old name.txt", status: .renamed, added: 0, removed: 0)]))
+    let diff = try decode(#"{"diff":{"session":"11111111-2222-3333-4444-555555555555","path":"a.txt","text":"@@ -1 +1 @@\n-a\n+b\n"}}"#)
+    #expect(diff == .diff(session: session, path: "a.txt", text: "@@ -1 +1 @@\n-a\n+b\n"))
+}
+
+@Test func farolHostsLiveActivityOpensOnThePhone() throws {
+    // Sealed by host/activity.go with the key 0, 1, 2 … 31, for a session that waits and one that works.
+    let state = RemoteActivityState(waiting: 1, working: 1, sealed: "O97235SuT/X904K6RGnhgiH4nxH4c9xGzuw6QCdTu4yDl22xMJplC1AnHpOJy6KalTJZDgxjHd469EGZ14FOsjQXXDcYWmm8kiLFIWc3ciuIPdIs8Sq3jQfRsag0K8ByUrYg4q5mN2wOyh8+2yaxkPUSyCmSWGx4KoQ5Rs1wEsDNAiOlWfLFDw2nEEg0KIqLejUwdUvBM1U3F8LhtDKTcjqru4cpvluhjmwA3pSrjftLGc4CLm+7CDg=")
+    let sessions = state.sessions(key: Data(0..<32))
+    #expect(sessions == [RemoteSession(id: try #require(UUID(uuidString: "11111111-2222-3333-4444-555555555555")), name: "api", branch: nil, status: .waiting),
+                         RemoteSession(id: try #require(UUID(uuidString: "22222222-3333-4444-5555-666666666666")), name: "web", branch: nil, status: .working)])
+}
+
+@Test func farolHostsNewSessionsRead() throws {
+    let command = try #require(UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"))
+    let session = try #require(UUID(uuidString: "22222222-3333-4444-5555-666666666666"))
+    let decode = { (text: String) in try JSONDecoder().decode(RemoteEvent.self, from: Data(text.utf8)) }
+    let options = try decode(#"{"options":{"projects":[{"id":"/srv/api","name":"api"},{"id":"/home/me","name":"Home"}],"agents":[{"id":"/home/me/.claude","name":"Claude Code"}],"agent":"/home/me/.claude"}}"#)
+    #expect(options == .options(projects: [RemoteChoice(id: "/srv/api", name: "api"), RemoteChoice(id: "/home/me", name: "Home")],
+                                agents: [RemoteChoice(id: "/home/me/.claude", name: "Claude Code")], agent: "/home/me/.claude"))
+    #expect(try decode(#"{"options":{"projects":[],"agents":[]}}"#) == .options(projects: [], agents: [], agent: nil))
+    #expect(try decode(#"{"opened":{"command":"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE","session":"22222222-3333-4444-5555-666666666666"}}"#) == .opened(command: command, session: session))
+    // What host_test.go sends for a plain shell: no agent at all.
+    let open = try JSONSerialization.jsonObject(with: JSONEncoder().encode(RemoteCommand(.open(project: "/srv/api", agent: nil))))
+    #expect(NSDictionary(dictionary: ((open as? [String: Any])?["action"] as? [String: Any]) ?? [:]) == ["open": ["project": "/srv/api"]])
+}
+
+@Test func farolHostsSealedNoticeOpensOnThePhone() throws {
+    // Sealed by host/notices.go with the key 0, 1, 2 … 31.
+    let sealed = try #require(Data(base64Encoded: "XY7yZl8nCg2Bdnh5HB+RRks5oaHiHWslhUrePMqqu+K3qJV4+9lvUabYuTkW5F9tjIyYs9F7RroskmPGsjA9sV6cHtl3P+x0HTvXzf7zLP2YsJpQcFr6x3cP2OvbOqgZ0LWgTiTS6sXbmsLxdx4="))
+    let content = NoticeBox.open(sealed, key: Data(0..<32))
+    #expect(content == RemoteNoticeContent(session: try #require(UUID(uuidString: "11111111-2222-3333-4444-555555555555")), name: "api", notice: .waiting))
+}
+
+@Test func farolHostsCommandsAndPicturesRead() throws {
+    let session = try #require(UUID(uuidString: "11111111-2222-3333-4444-555555555555"))
+    let picture = try #require(UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"))
+    let decode = { (text: String) in try JSONDecoder().decode(RemoteEvent.self, from: Data(text.utf8)) }
+    let commands = try decode(#"{"commands":{"session":"11111111-2222-3333-4444-555555555555","commands":[{"name":"compact","detail":"Summarize","menu":false,"mention":false},{"name":"farol","menu":false,"mention":true}]}}"#)
+    #expect(commands == .commands(session: session, commands: [RemoteAgentCommand(name: "compact", detail: "Summarize"), RemoteAgentCommand(name: "farol", mention: true)]))
+    let path = "/home/me/.cache/Farol/Attachments/AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE.png"
+    let attached = try decode(#"{"attached":{"command":"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE","attachment":"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE","path":"/home/me/.cache/Farol/Attachments/AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE.png"}}"#)
+    #expect(attached == .attached(command: picture, attachment: picture, path: path))
+    // A part as host_test.go sends it: the bytes in base64.
+    let part = try JSONSerialization.jsonObject(with: JSONEncoder().encode(RemoteCommand(.attach(session: session, attachment: picture, part: 1, parts: 2, data: Data([1, 2, 3])))))
+    let action = (part as? [String: Any])?["action"] as? [String: Any]
+    #expect(NSDictionary(dictionary: action ?? [:]) == ["attach": ["session": session.uuidString, "attachment": picture.uuidString, "part": 1, "parts": 2, "data": "AQID"]])
+}
+
+@Test func farolHostsRequestsReadAndItsAnswersGoAsItReadsThem() throws {
+    let session = try #require(UUID(uuidString: "11111111-2222-3333-4444-555555555555"))
+    let decode = { (text: String) in try JSONDecoder().decode(RemoteEvent.self, from: Data(text.utf8)) }
+    #expect(try decode(#"{"request":{"session":"11111111-2222-3333-4444-555555555555"}}"#) == .request(session: session, request: nil))
+    let tool = try decode(#"{"request":{"session":"11111111-2222-3333-4444-555555555555","request":{"id":"toolu_1","tool":"Bash","title":"Run the tests","detail":"npm test","choices":[]}}}"#)
+    #expect(tool == .request(session: session, request: RemoteRequest(id: "toolu_1", tool: "Bash", title: "Run the tests", detail: "npm test")))
+    let question = try decode(#"{"request":{"session":"11111111-2222-3333-4444-555555555555","request":{"id":"q","title":"Which?","choices":[{"label":"A","detail":"first"},{"label":"B"}]}}}"#)
+    #expect(question == .request(session: session, request: RemoteRequest(id: "q", tool: nil, title: "Which?", choices: [.init(label: "A", detail: "first"), .init(label: "B")])))
+    // What host_test.go sends as the phone's answer.
+    let answer = try JSONSerialization.jsonObject(with: JSONEncoder().encode(RemoteCommand(.answer(session: session, request: "toolu_1", choice: 2))))
+    let action = (answer as? [String: Any])?["action"] as? [String: Any]
+    #expect(NSDictionary(dictionary: action ?? [:]) == ["answer": ["session": session.uuidString, "request": "toolu_1", "choice": 2]])
+}
+
+@Test func farolHostsConversationReads() throws {
+    let session = try #require(UUID(uuidString: "11111111-2222-3333-4444-555555555555"))
+    let decode = { (text: String) in try JSONDecoder().decode(RemoteEvent.self, from: Data(text.utf8)) }
+    let after = try decode(#"{"conversation":{"session":"11111111-2222-3333-4444-555555555555","messages":[{"id":"a1.0","role":"agent","text":"<b> & co"},{"id":"a2.0","role":"tool","text":"Run the tests","tool":"Bash","detail":"npm test"}],"place":{"after":{"_0":"u1.0"}},"more":false}}"#)
+    #expect(after == .conversation(session: session, messages: [RemoteMessage(id: "a1.0", role: .agent, text: "<b> & co"),
+                                                                RemoteMessage(id: "a2.0", role: .tool, text: "Run the tests", tool: "Bash", detail: "npm test")],
+                                   place: .after("u1.0"), more: false))
+    let latest = try decode(#"{"conversation":{"session":"11111111-2222-3333-4444-555555555555","messages":[],"place":{"latest":{}},"more":true}}"#)
+    #expect(latest == .conversation(session: session, messages: [], place: .latest, more: true))
+    let before = try decode(#"{"conversation":{"session":"11111111-2222-3333-4444-555555555555","messages":[],"place":{"before":{"_0":"x"}},"more":false}}"#)
+    #expect(before == .conversation(session: session, messages: [], place: .before("x"), more: false))
 }

@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/snowztech/farol-remote/host/agent"
 )
 
 // testdata/swift.json was written by the Swift package: two keys made for the test, and what they sealed for each other.
@@ -179,9 +182,24 @@ func TestWritesEventsAsSwiftReadsThem(t *testing.T) {
 	v := vectors(t)
 	const id, sessionID = "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE", "11111111-2222-3333-4444-555555555555"
 	branch := "main"
-	// The hello Swift reads, as the Swift package's tests say it does. The recording's own hello is from before hosts said what they can do.
-	if got, want := read[any](t, string(helloEvent("host"))), read[any](t, `{"hello":{"version":1,"features":[],"name":"host"}}`); !reflect.DeepEqual(got, want) {
-		t.Fatalf("hello: wrote %s", helloEvent("host"))
+	// What Swift reads, as the Swift package's tests say it does. The recording is from before hosts said what they can do.
+	for wrote, want := range map[string]string{
+		string(helloEvent("host")): `{"hello":{"version":1,"features":["conversation","requests","commands","attachments","terminal","notifications","sessions","changes"],"name":"host"}}`,
+		string(commandsEvent(sessionID, []agent.Command{{Name: "compact", Detail: "Summarize"}, {Name: "farol", Mention: true}})): `{"commands":{"session":"11111111-2222-3333-4444-555555555555","commands":[{"name":"compact","detail":"Summarize","menu":false,"mention":false},{"name":"farol","menu":false,"mention":true}]}}`,
+		string(attachedEvent(id, picture, "/home/me/.cache/Farol/Attachments/"+picture+".png")):                                   `{"attached":{"command":"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE","attachment":"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE","path":"/home/me/.cache/Farol/Attachments/AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE.png"}}`,
+		string(requestEvent(sessionID, nil)): `{"request":{"session":"11111111-2222-3333-4444-555555555555"}}`,
+		string(requestEvent(sessionID, &agent.Request{ID: "toolu_1", Tool: "Bash", Title: "Run the tests", Detail: "npm test", Choices: []agent.Choice{}})):                                                                          `{"request":{"session":"11111111-2222-3333-4444-555555555555","request":{"id":"toolu_1","tool":"Bash","title":"Run the tests","detail":"npm test","choices":[]}}}`,
+		string(requestEvent(sessionID, &agent.Request{ID: "q", Title: "Which?", Choices: []agent.Choice{{Label: "A", Detail: "first"}, {Label: "B"}}})):                                                                              `{"request":{"session":"11111111-2222-3333-4444-555555555555","request":{"id":"q","title":"Which?","choices":[{"label":"A","detail":"first"},{"label":"B"}]}}}`,
+		string(conversationEvent(sessionID, []agent.Message{{ID: "a1.0", Role: agent.Agent, Text: "<b> & co"}, {ID: "a2.0", Role: agent.Tool, Text: "Run the tests", Tool: "Bash", Detail: "npm test"}}, placeAfter("u1.0"), false)): `{"conversation":{"session":"11111111-2222-3333-4444-555555555555","messages":[{"id":"a1.0","role":"agent","text":"<b> & co"},{"id":"a2.0","role":"tool","text":"Run the tests","tool":"Bash","detail":"npm test"}],"place":{"after":{"_0":"u1.0"}},"more":false}}`,
+		string(conversationEvent(sessionID, nil, latest, true)):            `{"conversation":{"session":"11111111-2222-3333-4444-555555555555","messages":[],"place":{"latest":{}},"more":true}}`,
+		string(conversationEvent(sessionID, nil, placeBefore("x"), false)): `{"conversation":{"session":"11111111-2222-3333-4444-555555555555","messages":[],"place":{"before":{"_0":"x"}},"more":false}}`,
+	} {
+		if !reflect.DeepEqual(read[any](t, wrote), read[any](t, want)) {
+			t.Fatalf("wrote %s, Swift reads %s", wrote, want)
+		}
+	}
+	if strings.Contains(string(conversationEvent(sessionID, []agent.Message{{Text: "<b> & co"}}, latest, false)), `\u003c`) {
+		t.Fatal("wrote < as Go does for HTML")
 	}
 	ours := [][]byte{
 		nil,

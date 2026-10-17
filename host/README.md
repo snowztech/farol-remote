@@ -22,7 +22,7 @@ curl -fsSL https://farol.sh/host.sh | sh
 farol-host setup
 ```
 
-It connects Claude Code and Codex, so the phone shows when one works, waits or is done. It keeps `farol-host` running, from boot, with systemd. Then it shows a code: scan it from Farol on your phone.
+It connects Claude Code and Codex, so the phone shows when one works, waits or is done, and opens a session as the agent's conversation. It keeps `farol-host` running, from boot, with systemd. Then it shows a code: scan it from Farol on your phone.
 
 **3. Start an agent.** Every tmux session on the machine is one the phone can open.
 
@@ -30,6 +30,8 @@ It connects Claude Code and Codex, so the phone shows when one works, waits or i
 tmux new -s api -c ~/code/api
 claude
 ```
+
+On the phone, the session opens as the agent's conversation, and the terminal is one tap away. An approval or a question shows with its answers, to pick with a tap. Typing a slash lists the agent's commands and skills, and a photo or a screenshot can go with a reply. The phone is notified when an agent waits for you or finishes, even with the app closed, its Live Activity keeps count of the agents that work or wait, can open a new session in a project already open here, with Claude Code, Codex or a plain shell, and shows what changed in a session's repository, file by file. A session with no agent opens as its terminal.
 
 A phone knows several Macs and servers at once. Scanning a server's code adds it next to your Mac, and its sessions show in the same list, with the server's name.
 
@@ -61,15 +63,14 @@ Scan the code it shows, then leave with `Ctrl-b d`.
 ## Good to know
 
 - **A relay of your own.** Run `farol-host -relay wss://your.host setup` or set `FAROL_RELAY`. A phone stays with the relay it was paired through. See [relay/README.md](../relay/README.md).
-- **What it keeps.** This machine's key and the phones it paired, in `farol-host` under your config folder, readable by you alone. `FAROL_HOST_DIR` puts them elsewhere.
-- **Updating.** Run the install line again, then `farol-host setup` to restart it on the new version.
+- **What it keeps.** This machine's key and the phones it paired, in `farol-host` under your config folder, readable by you alone. `FAROL_HOST_DIR` puts them elsewhere. Where to notify each phone is kept beside them. Pictures from the phone go in `Farol/Attachments` under your cache folder, and are removed after a week.
+- **Updating.** Run the install line again, then `farol-host setup` to restart it on the new version and connect the hooks it now needs. Restart your agents so they read them.
 - **What setup changes.** It adds hooks to `~/.claude/settings.json` and `~/.codex/hooks.json`, keeping a copy of each as `.farol-backup`, and adds a systemd service named `farol-host`.
 - **Removing it.** `systemctl --user disable --now farol-host`, then delete `~/.local/bin/farol-host` and that folder. As root, leave out `--user`.
 
 ## Not done yet
 
-- Notifications when an agent waits or finishes.
-- Starting a task from the phone.
+- Starting a task in a new worktree from the phone.
 
 ## Work on it
 
@@ -78,7 +79,14 @@ Scan the code it shows, then leave with `Ctrl-b d`.
 | `main.go` | The commands, and the connection to the relay |
 | `setup.go` | Connecting the agents' hooks, and the systemd service |
 | `host.go` | What a phone may ask, and what it is told |
-| `tmux.go` | Listing, reading and typing into sessions, and their status |
+| `agents.go` | The conversation of the agent a phone watches, a page at a time, answering what it asks, its commands, and pictures |
+| `attachments.go` | Putting a picture together from its parts, and checking it is one |
+| `notices.go` | Notifying phones when a session waits or finishes |
+| `activity.go` | Keeping each phone's Live Activity current |
+| `sessions.go` | Opening and closing sessions from the phone |
+| `changes.go` | What changed in a session's repository, as the Mac's review panel compares it |
+| `agent/` | Reading Claude Code's and Codex's logs, their hooks' input and their commands, as Farol on a Mac does |
+| `tmux.go` | Listing, reading and typing into sessions, and what their agent's hooks said |
 | `secure.go` | Pairing and the encryption, the same as the Swift package |
 | `wire.go` | The messages, written as the Swift package writes them |
 | `store.go` | The key, the paired phones and the code on screen |
