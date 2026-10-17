@@ -19,6 +19,8 @@ type fakeTerminal struct {
 	typed []string
 	// What the hooks said of its agent.
 	agent agentState
+	// The sessions opened, as "folder name command", and closed.
+	opened, closed []string
 }
 
 const fakeSession = "11111111-2222-3333-4444-555555555555"
@@ -45,6 +47,18 @@ func (f *fakeTerminal) agentIn(id string) (agentState, bool) {
 }
 
 func (f *fakeTerminal) answered(id string) { f.agent.request = nil }
+
+const openedSession = "22222222-3333-4444-5555-666666666666"
+
+func (f *fakeTerminal) open(dir, name, command string) (string, bool) {
+	f.opened = append(f.opened, dir+" "+name+" "+command)
+	return openedSession, true
+}
+
+func (f *fakeTerminal) close(id string) bool {
+	f.closed = append(f.closed, id)
+	return id == fakeSession
+}
 
 func (f *fakeTerminal) paste(id, text string) bool {
 	if id == fakeSession {
@@ -314,7 +328,7 @@ func TestWhatTheHostCannotDoIsRefusedAndNotLeftUnanswered(t *testing.T) {
 	b.ready()
 	for id, c := range map[string]struct{ action, reason string }{
 		"newer":  {`{"rename":{}}`, "This machine does not know how to do that. Update farol-host on it."},
-		"task":   {`{"options":{}}`, "This machine cannot start tasks from the phone yet."},
+		"task":   {`{"task":{}}`, "This machine cannot start tasks from the phone yet."},
 		"closed": {send("00000000-0000-0000-0000-000000000000", "x"), "That session is closed."},
 	} {
 		same(t, b.ask(id, c.action), refusedEvent(id, c.reason))
@@ -577,5 +591,106 @@ func TestAForgottenPhoneIsNotNotified(t *testing.T) {
 	b.tick()
 	if len(b.pushes) != 0 {
 		t.Fatalf("asked %s", b.pushes)
+	}
+}
+
+func TestAPhoneOpensASessionOnlyInAProjectFromTheList(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.terminal.agent.folder = filepath.Join(t.TempDir(), "shelf.app")
+	home, _ := os.UserHomeDir()
+	told := b.ask("o", `{"options":{}}`)
+	if len(told) != 1 || !strings.Contains(told[0], `{"id":"`+b.terminal.agent.folder+`","name":"shelf.app"}`) || !strings.Contains(told[0], `{"id":"`+home+`","name":"Home"}`) {
+		t.Fatalf("told %v", told)
+	}
+	open := func(id, project string) []string {
+		return b.ask(id, fmt.Sprintf(`{"open":{"project":%q}}`, project))
+	}
+	same(t, open("new", b.terminal.agent.folder)[:1], openedEvent("new", openedSession))
+	// Sent again on a new connection, it is answered and not opened twice.
+	same(t, open("new", b.terminal.agent.folder), openedEvent("new", openedSession))
+	if len(b.terminal.opened) != 1 || b.terminal.opened[0] != b.terminal.agent.folder+" shelf-app " {
+		t.Fatalf("opened %q", b.terminal.opened)
+	}
+	same(t, open("elsewhere", "/etc"), refusedEvent("elsewhere", "This machine could not open that session. Pick the project again and retry."))
+	same(t, b.ask("agent", fmt.Sprintf(`{"open":{"project":%q,"agent":"/bin"}}`, home)), refusedEvent("agent", "This machine could not open that session. Pick the agent again and retry."))
+	if len(b.terminal.opened) != 1 {
+		t.Fatalf("opened %q", b.terminal.opened)
+	}
+}
+
+func TestAPhoneClosesASessionOnce(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	close := fmt.Sprintf(`{"close":{"session":%q}}`, fakeSession)
+	same(t, b.ask("c", close), doneEvent("c"))
+	same(t, b.ask("c", close), doneEvent("c"))
+	if len(b.terminal.closed) != 1 {
+		t.Fatalf("closed %v", b.terminal.closed)
+	}
+}
+
+// activities are the Live Activity frames the host asked the relay for, read back.
+func (b *bench) activities() []map[string]any {
+	var list []map[string]any
+	for _, push := range b.pushes {
+		var request map[string]any
+		json.Unmarshal(push, &request)
+		if request["activity"] != nil {
+			list = append(list, request)
+		}
+	}
+	return list
+}
+
+func TestALiveActivityStartsOnAClosedPhoneWhenSomethingGetsBusy(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	key := make([]byte, 32)
+	b.ask("n", `{"notify":{"token":"q80=","sandbox":false,"key":"`+base64.StdEncoding.EncodeToString(key)+`","starts":"7+8="}}`)
+	b.tick()
+	b.terminal.agent.status = "working"
+	b.tick()
+	if len(b.activities()) != 0 {
+		t.Fatal("started on a phone that has the app open")
+	}
+	b.host.phones = map[uint32]*phone{}
+	b.terminal.agent.status = "waiting"
+	b.tick()
+	b.terminal.agent.status = "working"
+	b.tick()
+	started := b.activities()
+	if len(started) != 1 || started[0]["token"] != "efef" || started[0]["activity"] != "start" || started[0]["urgent"] != true || started[0]["waiting"] != 1.0 {
+		t.Fatalf("asked %v", started)
+	}
+	sealed, _ := base64.StdEncoding.DecodeString(started[0]["sealed"].(string))
+	aead, _ := chacha20poly1305.New(key)
+	plain, err := aead.Open(nil, sealed[:12], sealed[12:], nil)
+	if err != nil || string(plain) != `[{"id":"`+fakeSession+`","name":"demo","status":"waiting"}]` {
+		t.Fatalf("sealed %s %v", plain, err)
+	}
+}
+
+func TestALiveActivityFollowsTheSessionsAndEndsWhenAllIsQuiet(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.tick()
+	b.ask("a", `{"activity":{"token":"q80=","sandbox":true}}`)
+	b.terminal.agent.status = "working"
+	b.tick()
+	b.terminal.agent.status = "waiting"
+	b.tick()
+	b.tick()
+	b.terminal.agent.status = "done"
+	b.tick()
+	var events []string
+	for _, a := range b.activities() {
+		events = append(events, fmt.Sprintf("%s %v %v", a["activity"], a["waiting"], a["urgent"]))
+	}
+	if got := strings.Join(events, ", "); got != "update 0 false, update 1 true, end 0 false" {
+		t.Fatalf("asked %s", got)
+	}
+	if len(b.host.store.activityTargets()) != 0 {
+		t.Fatal("an ended activity is still followed")
 	}
 }

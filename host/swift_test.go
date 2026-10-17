@@ -184,7 +184,7 @@ func TestWritesEventsAsSwiftReadsThem(t *testing.T) {
 	branch := "main"
 	// What Swift reads, as the Swift package's tests say it does. The recording is from before hosts said what they can do.
 	for wrote, want := range map[string]string{
-		string(helloEvent("host")): `{"hello":{"version":1,"features":["conversation","requests","commands","attachments","terminal","notifications"],"name":"host"}}`,
+		string(helloEvent("host")): `{"hello":{"version":1,"features":["conversation","requests","commands","attachments","terminal","notifications","sessions","changes"],"name":"host"}}`,
 		string(commandsEvent(sessionID, []agent.Command{{Name: "compact", Detail: "Summarize"}, {Name: "farol", Mention: true}})): `{"commands":{"session":"11111111-2222-3333-4444-555555555555","commands":[{"name":"compact","detail":"Summarize","menu":false,"mention":false},{"name":"farol","menu":false,"mention":true}]}}`,
 		string(attachedEvent(id, picture, "/home/me/.cache/Farol/Attachments/"+picture+".png")):                                   `{"attached":{"command":"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE","attachment":"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE","path":"/home/me/.cache/Farol/Attachments/AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE.png"}}`,
 		string(requestEvent(sessionID, nil)): `{"request":{"session":"11111111-2222-3333-4444-555555555555"}}`,
