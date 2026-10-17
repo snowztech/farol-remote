@@ -81,7 +81,7 @@ func main() {
 	switch flag.Arg(0) {
 	case "":
 		// ponytail: services set up before `run` existed start farol-host with no command and no terminal. Drop once they are all rewritten by setup.
-		if info, err := os.Stdout.Stat(); err != nil || info.Mode()&os.ModeCharDevice == 0 {
+		if !onScreen() {
 			letPhonesIn(store, *relay, key)
 			return
 		}
@@ -145,6 +145,12 @@ func hookInput() []byte {
 	}
 }
 
+// onScreen is true when what this prints goes to a terminal, and not to a log.
+func onScreen() bool {
+	info, err := os.Stdout.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
 func env(name, otherwise string) string {
 	if value := os.Getenv(name); value != "" {
 		return value
@@ -160,8 +166,13 @@ func letPhonesIn(store store, relay string, key deviceKey) {
 	if !store.lock() {
 		log.Fatal("farol-host is already running on this machine")
 	}
+	// A code is shown only to someone looking. Under systemd nobody is, and a code made here would replace the one setup shows.
 	if len(store.devices()) == 0 {
-		showCode(store, relay, key)
+		if onScreen() {
+			showCode(store, relay, key)
+		} else {
+			log.Print("no phone is paired yet: run farol-host pair")
+		}
 	}
 	// First in the log, so a report that quotes the log says which release it was.
 	log.Printf("farol-host %s", version)
