@@ -54,6 +54,9 @@ func TestListsReadsAndTypesIntoARealSession(t *testing.T) {
 	if _, ok := tm.history(id); !ok {
 		t.Fatal("no history")
 	}
+	if !tm.press(id, "C-l") || tm.press(id, "C-Enter") {
+		t.Fatal("Control with a letter, and nothing else")
+	}
 	if _, ok := tm.screen("00000000-0000-0000-0000-000000000000"); ok {
 		t.Fatal("read a session that does not exist")
 	}

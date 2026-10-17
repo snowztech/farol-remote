@@ -492,3 +492,31 @@ func TestReturnWaitsForTheAgentToOpenAPicture(t *testing.T) {
 		t.Fatal("a picture gives the agent no more time")
 	}
 }
+
+func TestAPhoneReadingTheConversationGetsTheScreenOnlyWithTheTerminalOpen(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.ask("t", fmt.Sprintf(`{"terminal":{"session":%q,"open":false}}`, fakeSession))
+	b.ask("w", watch(fakeSession))
+	b.ask("s", send(fakeSession, "x"))
+	if told := b.tick(); len(told) != 0 {
+		t.Fatalf("told %v", told)
+	}
+	same(t, b.ask("o", fmt.Sprintf(`{"terminal":{"session":%q,"open":true}}`, fakeSession)), screenEvent(fakeSession, "typed: x"))
+	// Faster while it is open.
+	start := time.Now()
+	b.host.due(start)
+	if b.host.due(start.Add(100*time.Millisecond)) || !b.host.due(start.Add(130*time.Millisecond)) {
+		t.Fatal("not paced for a terminal")
+	}
+}
+
+func TestControlTakesALetterOnly(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	same(t, b.ask("c", fmt.Sprintf(`{"control":{"session":%q,"key":"c"}}`, fakeSession)), doneEvent("c"))
+	same(t, b.ask("bad", fmt.Sprintf(`{"control":{"session":%q,"key":"Enter"}}`, fakeSession)), refusedEvent("bad", "Only Control with a letter can be sent."))
+	if got := strings.Join(b.terminal.typed, ","); got != "<C-c>" {
+		t.Fatalf("typed %s", got)
+	}
+}

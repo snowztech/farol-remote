@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -30,6 +31,9 @@ type terminal interface {
 	keys(id, text string) bool
 	press(id, key string) bool
 }
+
+// Control with a letter, as the host asks for it, in tmux's own words.
+var controlKey = regexp.MustCompile(`^C-[a-z]$`)
 
 // The names tmux gives the keys a phone can press.
 var tmuxKeys = map[string]string{
@@ -189,6 +193,9 @@ func (t *tmux) keys(id, text string) bool {
 func (t *tmux) press(id, key string) bool {
 	target, ok := t.target(id)
 	name, known := tmuxKeys[key]
+	if controlKey.MatchString(key) {
+		name, known = key, true
+	}
 	if !ok || !known {
 		return false
 	}

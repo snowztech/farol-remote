@@ -213,7 +213,7 @@ func connect(h *host, address string) error {
 	log.Print("connected to the relay")
 
 	go func() {
-		look, ping := time.NewTicker(500*time.Millisecond), time.NewTicker(20*time.Second)
+		look, ping := time.NewTicker(40*time.Millisecond), time.NewTicker(20*time.Second)
 		defer look.Stop()
 		defer ping.Stop()
 		for {
@@ -221,7 +221,9 @@ func connect(h *host, address string) error {
 			case <-ctx.Done():
 				return
 			case <-look.C:
-				h.tick()
+				if h.due(time.Now()) {
+					h.tick()
+				}
 			case <-ping.C:
 				// A connection that died without saying so reads nothing and fails nothing. A ping with no answer is how we learn.
 				waiting, done := context.WithTimeout(ctx, 10*time.Second)

@@ -184,8 +184,10 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
 
 @Test func farolHostsHelloReadsAsAHostThatDoesWhatAMacDoesForAgents() throws {
     // What `farol-host` writes, as its host/swift_test.go checks.
-    let hello = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1,"features":["conversation","requests","commands","attachments"],"name":"host"}}"#.utf8))
-    #expect(hello == .hello(version: 1, features: ["conversation", "requests", "commands", "attachments"], name: "host"))
+    let hello = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1,"features":["conversation","requests","commands","attachments","terminal"],"name":"host"}}"#.utf8))
+    #expect(hello == .hello(version: 1, features: ["conversation", "requests", "commands", "attachments", "terminal"], name: "host"))
+    // Everything a Mac does for agents. Starting sessions, changes and notifications are a Mac's alone for now.
+    #expect(RemoteFeature.of(["conversation", "requests", "commands", "attachments", "terminal"]) == [.conversation, .requests, .commands, .attachments, .terminal])
 }
 
 @Test func farolHostsCommandsAndPicturesRead() throws {

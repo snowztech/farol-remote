@@ -31,6 +31,8 @@ type host struct {
 	pasted map[string]paste
 	// Pictures from phones. Made the first time one comes.
 	pictures *inbox
+	// When phones were last sent what changed.
+	looked time.Time
 }
 
 type paste struct {
@@ -51,6 +53,10 @@ type phone struct {
 	sessions []byte
 	screen   *string
 	reading  *reading
+	// It said when it shows a terminal, so its screen goes only then. An older phone never says, and always gets it.
+	saysTerminal bool
+	// The session whose terminal it shows.
+	terminal string
 	// What it was last told the watched session waits on. Nil until told, so it is always told once, even that it waits on nothing.
 	request []byte
 	// The session it was told is an empty conversation, an agent started there with no log yet, so it is told once.
@@ -181,6 +187,21 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 		h.conversation(id, p, c.ID, a.Conversation.Session, a.Conversation.Before)
 	case a.Answer != nil:
 		h.answer(id, p, c.ID, a.Answer.Session, a.Answer.Request, a.Answer.Choice)
+	case a.Terminal != nil:
+		p.saysTerminal, p.screen = true, nil
+		if a.Terminal.Open {
+			p.terminal = a.Terminal.Session
+		} else if p.terminal == a.Terminal.Session {
+			p.terminal = ""
+		}
+		h.refresh()
+	case a.Control != nil:
+		key := a.Control.Key
+		if len(key) != 1 || key[0] < 'a' || key[0] > 'z' {
+			h.tell(id, p, refusedEvent(c.ID, "Only Control with a letter can be sent."))
+			return
+		}
+		h.act(id, p, c.ID, func() bool { return h.terminal.press(a.Control.Session, "C-"+key) })
 	case a.Commands != nil:
 		h.commands(id, p, c.ID, a.Commands.Session)
 	case a.Attach != nil:
@@ -257,7 +278,24 @@ func returnDelay(text string, elapsed time.Duration) time.Duration {
 	return max(0, settle-elapsed)
 }
 
-// tick is called a few times a second. It does nothing while no phone is connected.
+// due says when to look again: often while a phone shows a terminal, so typing there feels live, and less the rest of the time.
+func (h *host) due(now time.Time) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	every := 400 * time.Millisecond
+	for _, p := range h.phones {
+		if p.terminal != "" {
+			every = 120 * time.Millisecond
+		}
+	}
+	if now.Sub(h.looked) < every {
+		return false
+	}
+	h.looked = now
+	return true
+}
+
+// tick looks again, as often as due says. It does nothing while no phone is connected.
 func (h *host) tick() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -294,6 +332,10 @@ func (h *host) refresh() {
 		}
 		h.follow(id, p)
 		h.tellRequest(id, p)
+		// A phone reading the conversation needs the screen only for a question the hooks did not describe.
+		if asked, _ := h.terminal.agentIn(p.watching); p.saysTerminal && p.terminal != p.watching && asked.status != "waiting" {
+			continue
+		}
 		text, ok := h.terminal.screen(p.watching)
 		if !ok || (p.screen != nil && *p.screen == text) {
 			continue
