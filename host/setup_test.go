@@ -52,6 +52,15 @@ func TestConnectingAnAgentKeepsWhatWasThereAndChangesNothingTheSecondTime(t *tes
 	if second, _ := os.ReadFile(file); string(second) != text {
 		t.Fatal("the second time changed the file")
 	}
+
+	// Uninstalling takes ours out and leaves the rest.
+	if err := connectFile(file, nil, someHost); err != nil {
+		t.Fatal(err)
+	}
+	gone, _ := os.ReadFile(file)
+	if strings.Contains(string(gone), someHost) || !strings.Contains(string(gone), "say done") || !strings.Contains(string(gone), "$FAROL_CLI") {
+		t.Fatalf("after uninstalling\n%s", gone)
+	}
 }
 
 func TestAnAgentWithNoSettingsYetGetsThem(t *testing.T) {
