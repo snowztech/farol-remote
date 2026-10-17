@@ -31,7 +31,7 @@ tmux new -s api -c ~/code/api
 claude
 ```
 
-On the phone, the session opens as the agent's conversation, and the terminal is one tap away. A session with no agent opens as its terminal.
+On the phone, the session opens as the agent's conversation, and the terminal is one tap away. An approval or a question shows with its answers, to pick with a tap. A session with no agent opens as its terminal.
 
 A phone knows several Macs and servers at once. Scanning a server's code adds it next to your Mac, and its sessions show in the same list, with the server's name.
 
@@ -70,7 +70,6 @@ Scan the code it shows, then leave with `Ctrl-b d`.
 
 ## Not done yet
 
-- Answering an approval or a question with a tap. For now, answer it in the terminal.
 - Slash commands and pictures from the phone.
 - Notifications when an agent waits or finishes.
 - Starting a task from the phone.
@@ -82,7 +81,7 @@ Scan the code it shows, then leave with `Ctrl-b d`.
 | `main.go` | The commands, and the connection to the relay |
 | `setup.go` | Connecting the agents' hooks, and the systemd service |
 | `host.go` | What a phone may ask, and what it is told |
-| `conversation.go` | Sending a phone the conversation of the agent it watches, a page at a time |
+| `agents.go` | The conversation of the agent a phone watches, a page at a time, and answering what it asks |
 | `agent/` | Reading Claude Code's and Codex's logs, and their hooks' input, as Farol on a Mac does |
 | `tmux.go` | Listing, reading and typing into sessions, and what their agent's hooks said |
 | `secure.go` | Pairing and the encryption, the same as the Swift package |

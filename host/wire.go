@@ -100,6 +100,11 @@ type command struct {
 		History *struct {
 			Session string `json:"session"`
 		} `json:"history"`
+		Answer *struct {
+			Session string `json:"session"`
+			Request string `json:"request"`
+			Choice  int    `json:"choice"`
+		} `json:"answer"`
 		// No message to go before asks for the latest page.
 		Conversation *struct {
 			Session string  `json:"session"`
@@ -136,7 +141,7 @@ func event(name string, body any) []byte {
 }
 
 // What this host can do beyond screens and typing, by the names RemoteFeature gives them.
-var features = []string{"conversation"}
+var features = []string{"conversation", "requests"}
 
 // helloEvent says the version this host speaks, what to call it, and what it can do.
 func helloEvent(name string) []byte {
@@ -170,6 +175,15 @@ func conversationEvent(session string, messages []agent.Message, place any, more
 		messages = []agent.Message{}
 	}
 	return event("conversation", map[string]any{"session": session, "messages": messages, "place": place, "more": more})
+}
+
+// requestEvent says what a session waits on. Nothing is said by leaving it out, as Swift does.
+func requestEvent(session string, request *agent.Request) []byte {
+	body := map[string]any{"session": session}
+	if request != nil {
+		body["request"] = request
+	}
+	return event("request", body)
 }
 
 func doneEvent(command string) []byte {

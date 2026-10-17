@@ -16,8 +16,7 @@ import (
 type fakeTerminal struct {
 	typed []string
 	// What the hooks said of its agent.
-	log     string
-	started bool
+	agent agentState
 }
 
 const fakeSession = "11111111-2222-3333-4444-555555555555"
@@ -32,12 +31,14 @@ func (f *fakeTerminal) screen(id string) (string, bool) {
 
 func (f *fakeTerminal) history(id string) (string, bool) { return "earlier", id == fakeSession }
 
-func (f *fakeTerminal) conversation(id string) (string, bool) {
+func (f *fakeTerminal) agentIn(id string) agentState {
 	if id != fakeSession {
-		return "", false
+		return agentState{}
 	}
-	return f.log, f.started
+	return f.agent
 }
+
+func (f *fakeTerminal) answered(id string) { f.agent.request = nil }
 
 func (f *fakeTerminal) paste(id, text string) bool {
 	if id == fakeSession {
@@ -238,7 +239,7 @@ func TestAPhoneThatNeverPairedIsTurnedAway(t *testing.T) {
 func TestWatchingASessionShowsItsScreenAndTypingChangesIt(t *testing.T) {
 	b := newBench(t)
 	b.ready()
-	same(t, b.ask("w", watch(fakeSession)), screenEvent(fakeSession, "typed: "))
+	same(t, b.ask("w", watch(fakeSession)), requestEvent(fakeSession, nil), screenEvent(fakeSession, "typed: "))
 	same(t, b.ask("s", send(fakeSession, "yes")), doneEvent("s"), screenEvent(fakeSession, "typed: yes"))
 	b.ask("k", fmt.Sprintf(`{"key":{"session":%q,"key":"enter"}}`, fakeSession))
 	same(t, b.ask("h", fmt.Sprintf(`{"history":{"session":%q}}`, fakeSession)), historyEvent(fakeSession, "earlier"))
@@ -352,10 +353,10 @@ func prompt(id, parent, text string) string {
 
 func (b *bench) writeLog(text string) {
 	b.t.Helper()
-	if b.terminal.log == "" {
-		b.terminal.log = filepath.Join(b.t.TempDir(), "log.jsonl")
+	if b.terminal.agent.log == "" {
+		b.terminal.agent.log = filepath.Join(b.t.TempDir(), "log.jsonl")
 	}
-	file, err := os.OpenFile(b.terminal.log, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	file, err := os.OpenFile(b.terminal.agent.log, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		b.t.Fatal(err)
 	}
@@ -389,8 +390,8 @@ func TestAPhoneReadsTheConversationAndThenWhatTheAgentWrites(t *testing.T) {
 func TestAPhoneWatchingAnAgentThatJustStartedSeesAnEmptyConversationThenItsLog(t *testing.T) {
 	b := newBench(t)
 	b.ready()
-	b.terminal.started = true
-	same(t, b.ask("w", watch(fakeSession)), conversationEvent(fakeSession, nil, latest, false), screenEvent(fakeSession, "typed: "))
+	b.terminal.agent.started = true
+	same(t, b.ask("w", watch(fakeSession)), conversationEvent(fakeSession, nil, latest, false), requestEvent(fakeSession, nil), screenEvent(fakeSession, "typed: "))
 	if told := b.tick(); len(told) != 0 {
 		t.Fatalf("told again %v", told)
 	}
@@ -429,4 +430,35 @@ func TestASessionWithoutAnAgentHasNoConversation(t *testing.T) {
 	b := newBench(t)
 	b.ready()
 	same(t, b.ask("c", conversation("")), refusedEvent("c", "This session has no agent conversation to show."))
+}
+
+func answer(session, request string, choice int) string {
+	return fmt.Sprintf(`{"answer":{"session":%q,"request":%q,"choice":%d}}`, session, request, choice)
+}
+
+func TestAPhoneAnswersWhatTheAgentAsksOnce(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	asked := &agent.Request{ID: "toolu_1", Title: "Which database?", Choices: []agent.Choice{{Label: "SQLite"}, {Label: "Postgres"}}}
+	b.terminal.agent = agentState{status: "waiting", started: true, request: asked}
+	same(t, b.ask("w", watch(fakeSession)), conversationEvent(fakeSession, nil, latest, false), requestEvent(fakeSession, asked), screenEvent(fakeSession, "typed: "))
+
+	same(t, b.ask("a", answer(fakeSession, "toolu_1", 2)), doneEvent("a"), requestEvent(fakeSession, nil), screenEvent(fakeSession, "typed: 2"))
+	// A second tap, before the agent moved on, is not typed into what it asks next.
+	same(t, b.ask("again", answer(fakeSession, "toolu_1", 1)), refusedEvent("again", "That was already answered."))
+	// The same tap sent again on a new connection is answered, and typed once.
+	same(t, b.ask("a", answer(fakeSession, "toolu_1", 2)), doneEvent("a"))
+	if got := strings.Join(b.terminal.typed, ","); got != "2" {
+		t.Fatalf("typed %s", got)
+	}
+}
+
+func TestAnAgentThatMovedOnTakesNoAnswer(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.terminal.agent = agentState{status: "working", request: &agent.Request{ID: "toolu_1", Choices: []agent.Choice{}}}
+	same(t, b.ask("a", answer(fakeSession, "toolu_1", 1)), refusedEvent("a", "That was already answered."))
+	if len(b.terminal.typed) != 0 {
+		t.Fatalf("typed %v", b.terminal.typed)
+	}
 }

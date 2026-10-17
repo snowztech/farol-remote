@@ -207,3 +207,32 @@ func TestADetailTooLongIsCutBetweenCharacters(t *testing.T) {
 		t.Fatalf("cut to %d bytes", len(cut))
 	}
 }
+
+func TestAPermissionRequestSaysWhatTheToolWouldDo(t *testing.T) {
+	request := RequestIn([]byte(`{"hook_event_name":"PermissionRequest","cwd":"/Users/me/shelf","tool_use_id":"toolu_1","tool_name":"Bash","tool_input":{"command":"npm test -- --watch=false","description":"Run the tests"}}`))
+	want := &Request{ID: "toolu_1", Tool: "Bash", Title: "Run the tests", Detail: "npm test -- --watch=false", Choices: []Choice{}}
+	if !reflect.DeepEqual(request, want) {
+		t.Fatalf("got %+v", request)
+	}
+}
+
+func TestAQuestionKeepsItsAnswersInOrder(t *testing.T) {
+	request := RequestIn([]byte(`{"hook_event_name":"PreToolUse","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"Which database?","header":"Storage","options":[{"label":"SQLite","description":"One file"},{"label":"Postgres"}]}]}}`))
+	if request == nil || request.Tool != "" || request.Title != "Which database?" || request.ID == "" ||
+		!reflect.DeepEqual(request.Choices, []Choice{{"SQLite", "One file"}, {"Postgres", ""}}) {
+		t.Fatalf("got %+v", request)
+	}
+}
+
+func TestOnlyARequestOrASingleQuestionIsARequest(t *testing.T) {
+	for _, input := range []string{
+		`{"hook_event_name":"PreToolUse","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"A?"},{"question":"B?"}]}}`,
+		`{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{}}`,
+		`{"hook_event_name":"Notification","message":"Claude needs your permission"}`,
+		"not json",
+	} {
+		if request := RequestIn([]byte(input)); request != nil {
+			t.Fatalf("%s gave %+v", input, request)
+		}
+	}
+}

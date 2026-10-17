@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"slices"
+	"strconv"
 
 	"github.com/snowztech/farol-remote/host/agent"
 )
 
-// What a phone reads of an agent's conversation, from the log its hooks named. Done as Farol on a Mac does it, in RemoteBridge.
+// What a phone reads of an agent and answers it: its conversation, from the log its hooks named, and what it asks.
+// Done as Farol on a Mac does it, in RemoteBridge.
 
 // The conversation a phone reads, and the last message it has, so only what follows is sent.
 type reading struct {
@@ -15,7 +18,8 @@ type reading struct {
 
 // conversation answers a phone that asks for a session's conversation: the latest page, which it then follows while it watches, or a page further back.
 func (h *host) conversation(id uint32, p *phone, command, session string, before *string) {
-	log, started := h.terminal.conversation(session)
+	asked := h.terminal.agentIn(session)
+	log, started := asked.log, asked.started
 	switch {
 	case log == "" && started && before == nil:
 		// An agent that has not said anything yet has no log, and its conversation is empty rather than missing.
@@ -51,7 +55,8 @@ func (h *host) sendLatest(id uint32, p *phone, messages []agent.Message) {
 // follow sends a phone what the agent in the session it watches wrote since it last heard.
 // The log is known only once a hook names it, and the phone shows the terminal until then, so it gets the conversation as soon as there is one.
 func (h *host) follow(id uint32, p *phone) {
-	log, started := h.terminal.conversation(p.watching)
+	asked := h.terminal.agentIn(p.watching)
+	log, started := asked.log, asked.started
 	switch r := p.reading; {
 	case r != nil && r.session == p.watching && r.log == log:
 		messages := h.messages(log)
@@ -123,4 +128,30 @@ func pageStart(messages []agent.Message, end int) int {
 		start--
 	}
 	return start
+}
+
+// tellRequest tells a phone what the session it watches waits on, when that changed. Nothing is a change too, so the phone stops showing what was asked.
+func (h *host) tellRequest(id uint32, p *phone) {
+	if event := requestEvent(p.watching, h.terminal.agentIn(p.watching).request); !bytes.Equal(event, p.request) {
+		p.request = event
+		h.tell(id, p, event)
+	}
+}
+
+// answer types the number of an answer, once, and only while the agent still asks what the phone answered.
+func (h *host) answer(id uint32, p *phone, command, session, request string, choice int) {
+	if !h.seenBy(p).insert(command) {
+		h.tell(id, p, doneEvent(command))
+		return
+	}
+	asked := h.terminal.agentIn(session)
+	if asked.request == nil || asked.request.ID != request || asked.status != "waiting" {
+		h.tell(id, p, refusedEvent(command, "That was already answered."))
+		return
+	}
+	// Gone at once, so a second tap is refused rather than typed into whatever the agent asks next.
+	h.terminal.answered(session)
+	h.terminal.keys(session, strconv.Itoa(choice))
+	h.tell(id, p, doneEvent(command))
+	h.refresh()
 }

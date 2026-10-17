@@ -60,31 +60,48 @@ func TestListsReadsAndTypesIntoARealSession(t *testing.T) {
 
 	pane, _ := run("", "tmux", "list-panes", "-t", "demo", "-F", "#{pane_id}")
 	pane = strings.TrimSpace(pane)
-	// What each hook says, the log it names, and what the session then shows.
+	const named = `{"session_id":"s","transcript_path":"/logs/a b.jsonl"}`
+	const asks = `{"hook_event_name":"PermissionRequest","tool_use_id":"toolu_1","tool_name":"Bash","tool_input":{"command":"rm -rf build\nmake","description":"Clean and build"}}`
+	// What each hook says, with what it got on its input, and what the session then shows.
 	for _, step := range []struct {
-		event, log, status, conversation string
-		started                          bool
+		event, hook, status, log, request string
+		started                           bool
 	}{
-		{"start", "", "idle", "", true},
-		{"working", "/logs/a b.jsonl", "working", "/logs/a b.jsonl", true},
-		{"waiting", "", "waiting", "/logs/a b.jsonl", true},
-		{"subagent-stop", "", "waiting", "/logs/a b.jsonl", true},
-		{"done", "", "done", "/logs/a b.jsonl", true},
+		{"start", "", "idle", "", "", true},
+		{"working", named, "working", "/logs/a b.jsonl", "", true},
+		{"waiting", asks, "waiting", "/logs/a b.jsonl", "toolu_1", true},
+		// A notification that it still waits keeps what it asks.
+		{"waiting", `{"hook_event_name":"Notification"}`, "waiting", "/logs/a b.jsonl", "toolu_1", true},
+		{"subagent-stop", "", "waiting", "/logs/a b.jsonl", "toolu_1", true},
+		{"done", "", "done", "/logs/a b.jsonl", "", true},
 		// The conversation stays readable after the agent ends.
-		{"clear", "", "idle", "/logs/a b.jsonl", false},
+		{"clear", "", "idle", "/logs/a b.jsonl", "", false},
 		// A new agent's is not the one before it.
-		{"start", "", "idle", "", true},
+		{"start", "", "idle", "", "", true},
 	} {
-		if !setStatus(pane, step.event, step.log) {
+		if !setStatus(pane, step.event, []byte(step.hook)) {
 			t.Fatalf("%s is not a status", step.event)
 		}
 		status := tm.sessions()[0].Status
-		log, started := tm.conversation(id)
-		if status != step.status || log != step.conversation || started != step.started {
-			t.Fatalf("after %s the session is %s, with log %q, started %v", step.event, status, log, started)
+		agent := tm.agentIn(id)
+		request := ""
+		if agent.request != nil {
+			request = agent.request.ID
+		}
+		if status != step.status || agent.log != step.log || agent.started != step.started || request != step.request {
+			t.Fatalf("after %s the session is %s, with %+v", step.event, status, agent)
 		}
 	}
-	if setStatus(pane, "dancing", "") {
+	setStatus(pane, "waiting", []byte(asks))
+	tm.sessions()
+	if request := tm.agentIn(id).request; request == nil || request.Detail != "rm -rf build\nmake" {
+		t.Fatalf("the request read back as %+v", request)
+	}
+	tm.answered(id)
+	if tm.sessions(); tm.agentIn(id).request != nil {
+		t.Fatal("an answered request is still there")
+	}
+	if setStatus(pane, "dancing", nil) {
 		t.Fatal("took a status that is not one")
 	}
 }

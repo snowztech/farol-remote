@@ -182,10 +182,24 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     #expect(old == .hello(version: 1))
 }
 
-@Test func farolHostsHelloReadsAsAHostThatReadsConversations() throws {
+@Test func farolHostsHelloReadsAsAHostThatReadsConversationsAndRequests() throws {
     // What `farol-host` writes, as its host/swift_test.go checks.
-    let hello = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1,"features":["conversation"],"name":"host"}}"#.utf8))
-    #expect(hello == .hello(version: 1, features: ["conversation"], name: "host"))
+    let hello = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1,"features":["conversation","requests"],"name":"host"}}"#.utf8))
+    #expect(hello == .hello(version: 1, features: ["conversation", "requests"], name: "host"))
+}
+
+@Test func farolHostsRequestsReadAndItsAnswersGoAsItReadsThem() throws {
+    let session = try #require(UUID(uuidString: "11111111-2222-3333-4444-555555555555"))
+    let decode = { (text: String) in try JSONDecoder().decode(RemoteEvent.self, from: Data(text.utf8)) }
+    #expect(try decode(#"{"request":{"session":"11111111-2222-3333-4444-555555555555"}}"#) == .request(session: session, request: nil))
+    let tool = try decode(#"{"request":{"session":"11111111-2222-3333-4444-555555555555","request":{"id":"toolu_1","tool":"Bash","title":"Run the tests","detail":"npm test","choices":[]}}}"#)
+    #expect(tool == .request(session: session, request: RemoteRequest(id: "toolu_1", tool: "Bash", title: "Run the tests", detail: "npm test")))
+    let question = try decode(#"{"request":{"session":"11111111-2222-3333-4444-555555555555","request":{"id":"q","title":"Which?","choices":[{"label":"A","detail":"first"},{"label":"B"}]}}}"#)
+    #expect(question == .request(session: session, request: RemoteRequest(id: "q", tool: nil, title: "Which?", choices: [.init(label: "A", detail: "first"), .init(label: "B")])))
+    // What host_test.go sends as the phone's answer.
+    let answer = try JSONSerialization.jsonObject(with: JSONEncoder().encode(RemoteCommand(.answer(session: session, request: "toolu_1", choice: 2))))
+    let action = (answer as? [String: Any])?["action"] as? [String: Any]
+    #expect(NSDictionary(dictionary: action ?? [:]) == ["answer": ["session": session.uuidString, "request": "toolu_1", "choice": 2]])
 }
 
 @Test func farolHostsConversationReads() throws {

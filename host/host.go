@@ -49,6 +49,8 @@ type phone struct {
 	sessions []byte
 	screen   *string
 	reading  *reading
+	// What it was last told the watched session waits on. Nil until told, so it is always told once, even that it waits on nothing.
+	request []byte
 	// The session it was told is an empty conversation, an agent started there with no log yet, so it is told once.
 	toldEmpty string
 }
@@ -171,10 +173,12 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 	case !p.greeted:
 		// Nothing is done for a phone before both sides know they speak the same version.
 	case a.Watch != nil:
-		p.watching, p.screen, p.reading, p.toldEmpty = a.Watch.Session, nil, nil, ""
+		p.watching, p.screen, p.reading, p.toldEmpty, p.request = a.Watch.Session, nil, nil, "", nil
 		h.refresh()
 	case a.Conversation != nil:
 		h.conversation(id, p, c.ID, a.Conversation.Session, a.Conversation.Before)
+	case a.Answer != nil:
+		h.answer(id, p, c.ID, a.Answer.Session, a.Answer.Request, a.Answer.Choice)
 	case a.Notify != nil:
 		// Where to notify this phone, which this host does not do yet.
 	case a.History != nil:
@@ -200,17 +204,22 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 
 // act types into a session once, however many times the command arrives.
 func (h *host) act(id uint32, p *phone, command string, do func() bool) {
-	seen := h.seen[string(p.device.Key)]
-	if seen == nil {
-		seen = &seenCommands{ids: map[string]bool{}}
-		h.seen[string(p.device.Key)] = seen
-	}
-	if seen.insert(command) && !do() {
+	if h.seenBy(p).insert(command) && !do() {
 		h.tell(id, p, refusedEvent(command, "That session is closed."))
 		return
 	}
 	h.tell(id, p, doneEvent(command))
 	h.refresh()
+}
+
+// seenBy is what the phone's device already had carried out.
+func (h *host) seenBy(p *phone) *seenCommands {
+	seen := h.seen[string(p.device.Key)]
+	if seen == nil {
+		seen = &seenCommands{ids: map[string]bool{}}
+		h.seen[string(p.device.Key)] = seen
+	}
+	return seen
 }
 
 // press presses a key. Return right after a paste waits for the agent to take the paste in, or it is lost and the reply stays unsent.
@@ -271,6 +280,7 @@ func (h *host) refresh() {
 			continue
 		}
 		h.follow(id, p)
+		h.tellRequest(id, p)
 		text, ok := h.terminal.screen(p.watching)
 		if !ok || (p.screen != nil && *p.screen == text) {
 			continue

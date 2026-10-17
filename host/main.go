@@ -17,7 +17,6 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/mdp/qrterminal/v3"
-	"github.com/snowztech/farol-remote/host/agent"
 )
 
 const usage = `usage: farol-host [-relay wss://your.relay] [command]
@@ -62,7 +61,7 @@ func main() {
 			os.Exit(64)
 		}
 		if pane := os.Getenv("TMUX_PANE"); pane != "" {
-			setStatus(pane, flag.Arg(1), agent.LogIn(hookInput()))
+			setStatus(pane, flag.Arg(1), hookInput())
 		}
 		return
 	}
