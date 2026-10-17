@@ -281,8 +281,9 @@ func TestHistoryThatIsTooLongKeepsItsLastWholeLines(t *testing.T) {
 }
 
 func TestASessionKeepsItsIdAndANewOneGetsAnother(t *testing.T) {
-	first := sessionID("$0", "1800000000")
-	if first != sessionID("$0", "1800000000") || first == sessionID("$0", "1800000001") {
+	first := sessionID([]byte("host"), "$0", "1800000000")
+	if first != sessionID([]byte("host"), "$0", "1800000000") || first == sessionID([]byte("host"), "$0", "1800000001") ||
+		first == sessionID([]byte("another host"), "$0", "1800000000") {
 		t.Fatal("ids do not follow the session")
 	}
 	if len(first) != 36 || first != strings.ToUpper(first) {
