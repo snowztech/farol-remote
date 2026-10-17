@@ -52,6 +52,15 @@ func TestConnectingAnAgentKeepsWhatWasThereAndChangesNothingTheSecondTime(t *tes
 	if second, _ := os.ReadFile(file); string(second) != text {
 		t.Fatal("the second time changed the file")
 	}
+
+	// Uninstalling takes ours out and leaves the rest.
+	if err := connectFile(file, nil, someHost); err != nil {
+		t.Fatal(err)
+	}
+	gone, _ := os.ReadFile(file)
+	if strings.Contains(string(gone), someHost) || !strings.Contains(string(gone), "say done") || !strings.Contains(string(gone), "$FAROL_CLI") {
+		t.Fatalf("after uninstalling\n%s", gone)
+	}
 }
 
 func TestAnAgentWithNoSettingsYetGetsThem(t *testing.T) {
@@ -78,7 +87,7 @@ func TestSettingsThatDoNotReadAreLeftAlone(t *testing.T) {
 func TestTheServiceRunsTheHostWithTheSamePathAndRelay(t *testing.T) {
 	mine := unit(someHost, "wss://relay.farol.sh", "/usr/bin:/opt/bin", "/home/me", "", false)
 	for _, line := range []string{`ExecStart="/home/me/.local/bin/farol-host" run`, `Environment="PATH=/usr/bin:/opt/bin"`,
-		`Environment="FAROL_RELAY=wss://relay.farol.sh"`, "Restart=always", "WantedBy=default.target"} {
+		`Environment="FAROL_RELAY=wss://relay.farol.sh"`, "Restart=always", "KillMode=process", "WantedBy=default.target"} {
 		if !strings.Contains(mine, line) {
 			t.Fatalf("%s is missing from\n%s", line, mine)
 		}

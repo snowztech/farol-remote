@@ -21,7 +21,7 @@ import (
 
 const usage = `usage: farol-host [-relay wss://your.relay] [command]
 
-The Farol Remote CLI, for a machine that stays on. It lets a paired phone see and type into every tmux session here.
+The Farol Remote CLI, for a machine that stays on. It lets a paired phone see and type into every tmux window here.
 fh is a shorter name for it.
 
   setup           Make this machine ready: connect your agents, keep farol-host running, pair a phone.
@@ -32,6 +32,8 @@ fh is a shorter name for it.
   status <word>   Say what the agent in this session is doing: start, working, waiting, done or clear.
                   An agent's hooks call it, with what the agent gave the hook on its input.
                   Outside tmux it does nothing, so the hooks are safe anywhere.
+  upgrade         Install the latest release, and restart farol-host on it. Sessions keep running.
+  uninstall       Remove farol-host, its service, its hooks and its paired phones. Sessions keep running.
   version         Say which release this is. So do --version and -v.
 `
 
@@ -101,6 +103,10 @@ func main() {
 		}
 	case "pair":
 		pair(store, *relay, key)
+	case "upgrade":
+		upgrade(*relay)
+	case "uninstall":
+		uninstall(store)
 	case "devices":
 		for _, d := range store.devices() {
 			fmt.Println(d.Name)

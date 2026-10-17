@@ -2,7 +2,7 @@
 
 > **Experimental.** Farol Remote currently focuses on continuing sessions from Farol on the Mac. This CLI previews an always-on host for people who deliberately run their agents on a server.
 
-Runs Farol Remote on a server. `farol-host` lets a paired phone see and type into the tmux sessions of a server, the way Farol on a Mac does for its own sessions. Your agents keep working, and you keep answering them, with the Mac closed or off.
+Runs Farol Remote on a server. `farol-host` lets a paired phone see and type into the tmux windows of a server, the way Farol on a Mac does for its own sessions. Your agents keep working, and you keep answering them, with the Mac closed or off.
 
 The phone reaches the server through the relay, as it reaches a Mac. Everything is encrypted between the two, so the relay cannot read it.
 
@@ -24,14 +24,14 @@ farol-host setup
 
 It connects Claude Code and Codex, so the phone shows when one works, waits or is done, and opens a session as the agent's conversation. It keeps `farol-host` running, from boot, with systemd. Then it shows a code: scan it from Farol on your phone.
 
-**3. Start an agent.** Every tmux session on the machine is one the phone can open.
+**3. Start an agent.** Every tmux window on the machine is a session the phone can open, as each tab of Farol on a Mac is. Agents started outside tmux, straight in an SSH shell, do not show.
 
 ```sh
 tmux new -s api -c ~/code/api
 claude
 ```
 
-On the phone, the session opens as the agent's conversation, and the terminal is one tap away. An approval or a question shows with its answers, to pick with a tap. Typing a slash lists the agent's commands and skills, and a photo or a screenshot can go with a reply. The phone is notified when an agent waits for you or finishes, even with the app closed, its Live Activity keeps count of the agents that work or wait, can open a new session in a project already open here, with Claude Code, Codex or a plain shell, and shows what changed in a session's repository, file by file. A session with no agent opens as its terminal.
+On the phone, the session opens as the agent's conversation, and the terminal is one tap away. An approval or a question shows with its answers, to pick with a tap. Typing a slash lists the agent's commands and skills, and a photo or a screenshot can go with a reply. The phone is notified when an agent waits for you or finishes, even with the app closed, its Live Activity keeps count of the agents that work or wait, can open a new session in a project already open here, with Claude Code, Codex or a plain shell, as a new window in the tmux session you used last, and shows what changed in a session's repository, file by file. A session with no agent opens as its terminal.
 
 A phone knows several Macs and servers at once. Scanning a server's code adds it next to your Mac, and its sessions show in the same list, with the server's name.
 
@@ -46,6 +46,8 @@ A phone knows several Macs and servers at once. Scanning a server's code adds it
 | `farol-host devices` | Lists the phones this machine lets in. |
 | `farol-host forget <name>` | Stops letting a phone in, notifying it and updating its Live Activity. One that is connected is cut off at once. A phone that forgets this machine in Farol tells it the same. |
 | `farol-host status <word>` | Says what the agent in this session is doing. The hooks `setup` adds call it. |
+| `farol-host upgrade` | Installs the latest release in place, then runs its setup, which restarts `farol-host` on it. Sessions keep running. |
+| `farol-host uninstall` | Removes the service, the hooks, this machine's key and paired phones, and the program. Sessions keep running. |
 | `farol-host version` | Says which release this is. So do `--version` and `-v`. |
 
 A code works once and lasts two minutes. Whoever scans it can type into your sessions, so show it to nobody else.
@@ -65,9 +67,9 @@ Scan the code it shows, then leave with `Ctrl-b d`.
 
 - **A relay of your own.** Run `farol-host -relay wss://your.host setup` or set `FAROL_RELAY`. A phone stays with the relay it was paired through. See [relay/README.md](../relay/README.md).
 - **What it keeps.** This machine's key and the phones it paired, in `farol-host` under your config folder, readable by you alone. `FAROL_HOST_DIR` puts them elsewhere. Where to notify each phone is kept beside them. Pictures from the phone go in `Farol/Attachments` under your cache folder, and are removed after a week.
-- **Updating.** Run the install line again, then `farol-host setup` to restart it on the new version and connect the hooks it now needs. Restart your agents so they read them.
+- **Updating.** `farol-host upgrade`. Restart your agents so they read any new hooks.
 - **What setup changes.** It adds hooks to `~/.claude/settings.json` and `~/.codex/hooks.json`, keeping a copy of each as `.farol-backup`, and adds a systemd service named `farol-host`.
-- **Removing it.** `systemctl --user disable --now farol-host`, then delete `~/.local/bin/farol-host`, `~/.local/bin/fh` and that folder. As root, leave out `--user`.
+- **Removing it.** `farol-host uninstall`.
 
 ## Not done yet
 
@@ -87,7 +89,7 @@ Scan the code it shows, then leave with `Ctrl-b d`.
 | `sessions.go` | Opening and closing sessions from the phone |
 | `changes.go` | What changed in a session's repository, as the Mac's review panel compares it |
 | `agent/` | Reading Claude Code's and Codex's logs, their hooks' input and their commands, as Farol on a Mac does |
-| `tmux.go` | Listing, reading and typing into sessions, and what their agent's hooks said |
+| `tmux.go` | Listing, reading and typing into windows, and what their agent's hooks said |
 | `secure.go` | Pairing and the encryption, the same as the Swift package |
 | `wire.go` | The messages, written as the Swift package writes them |
 | `store.go` | The key, the paired phones and the code on screen |

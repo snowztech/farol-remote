@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/user"
@@ -179,7 +180,9 @@ Environment=%q
 	if dir != "" {
 		text += fmt.Sprintf("Environment=%q\n", "FAROL_HOST_DIR="+dir)
 	}
-	return text + fmt.Sprintf(`Restart=always
+	// A session the phone opens with no tmux running starts tmux from here. Stopping only the host keeps it, and its agents, through a restart or an update.
+	return text + fmt.Sprintf(`KillMode=process
+Restart=always
 RestartSec=5
 
 [Install]
@@ -187,20 +190,29 @@ WantedBy=%s
 `, wanted)
 }
 
+// service is where the unit goes, and what systemctl is told to reach it. False for a machine without systemd.
+func service() (file string, scope []string, ok bool) {
+	if _, err := exec.LookPath("systemctl"); err != nil || runtime.GOOS != "linux" {
+		return "", nil, false
+	}
+	if os.Geteuid() == 0 {
+		return filepath.Join("/etc/systemd/system", serviceName+".service"), nil, true
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".config/systemd/user", serviceName+".service"), []string{"--user"}, true
+}
+
 // installService has systemd start the host now and at every boot. False is for a machine without systemd.
 func installService(program, relay string) (bool, error) {
-	if _, err := exec.LookPath("systemctl"); err != nil || runtime.GOOS != "linux" {
+	file, scope, ok := service()
+	if !ok {
 		return false, nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return true, err
 	}
-	system := os.Geteuid() == 0
-	file, scope := filepath.Join(home, ".config/systemd/user", serviceName+".service"), []string{"--user"}
-	if system {
-		file, scope = filepath.Join("/etc/systemd/system", serviceName+".service"), nil
-	}
+	system := scope == nil
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 		return true, err
 	}
@@ -230,17 +242,22 @@ func installService(program, relay string) (bool, error) {
 	return true, nil
 }
 
-// setup is `farol-host setup`. It is true when the host is now running as a service.
-func setup(relay string) bool {
+// self is where this program is. Run as fh, it is the link, and this is farol-host, which the hooks and the service name.
+func self() string {
 	program, err := os.Executable()
 	if err == nil {
-		// Run as fh, it is the link. The hooks and the service name farol-host, which is how a later setup finds them.
 		program, err = filepath.EvalSymlinks(program)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	return program
+}
+
+// setup is `farol-host setup`. It is true when the host is now running as a service.
+func setup(relay string) bool {
+	program := self()
 	home, _ := os.UserHomeDir()
 	found := false
 	for _, a := range agents(home) {
@@ -269,4 +286,85 @@ func setup(relay string) bool {
 	}
 	fmt.Println("farol-host is running, and starts again by itself when the machine does.")
 	return true
+}
+
+// The script that installs a release, the same for a first install and an upgrade.
+const installer = "https://farol.sh/host.sh"
+
+// upgrade is `farol-host upgrade`: the latest release in place of this one, then its own setup, which connects the hooks it needs and restarts the service on it.
+// Sessions keep running through the restart.
+func upgrade(relay string) {
+	program := self()
+	response, err := http.Get(installer)
+	if err == nil && response.StatusCode != http.StatusOK {
+		err = errors.New(response.Status)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "farol-host: the installer could not be downloaded: %v\n", err)
+		os.Exit(1)
+	}
+	defer response.Body.Close()
+	install := exec.Command("sh")
+	install.Stdin, install.Stdout, install.Stderr = response.Body, os.Stdout, os.Stderr
+	// Installed where this one is, and not wherever the script would put a first install.
+	install.Env = append(os.Environ(), "FAROL_BIN="+filepath.Dir(program))
+	if install.Run() != nil {
+		os.Exit(1)
+	}
+	again := exec.Command(program, "-relay", relay, "setup")
+	again.Stdin, again.Stdout, again.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if again.Run() != nil {
+		os.Exit(1)
+	}
+}
+
+// uninstall is `farol-host uninstall`: setup and the install undone. The service, the hooks, this machine's key and paired phones, its pictures, and the program.
+// The tmux sessions and their agents are left running.
+func uninstall(store store) {
+	if file, scope, ok := service(); ok {
+		if text, err := os.ReadFile(file); err == nil {
+			// A service set up before KillMode was in it would take the sessions it started with it when it stops.
+			if !bytes.Contains(text, []byte("KillMode=process")) {
+				os.WriteFile(file, bytes.Replace(text, []byte("Restart=always"), []byte("KillMode=process\nRestart=always"), 1), 0o644)
+				exec.Command("systemctl", append(scope, "daemon-reload")...).Run()
+			}
+			exec.Command("systemctl", append(scope, "disable", "--now", serviceName)...).Run()
+			os.Remove(file)
+			exec.Command("systemctl", append(scope, "daemon-reload")...).Run()
+			fmt.Println("Removed the farol-host service.")
+		}
+	}
+	if !store.lock() {
+		fmt.Fprintln(os.Stderr, "farol-host is still running. Stop it, then run uninstall again.")
+		os.Exit(1)
+	}
+	program := self()
+	home, _ := os.UserHomeDir()
+	for _, a := range agents(home) {
+		if _, err := os.Stat(a.file); err != nil {
+			continue
+		}
+		if err := connectFile(a.file, nil, program); err != nil {
+			fmt.Printf("%s's hooks were left in place: %v\n", a.name, err)
+			continue
+		}
+		fmt.Printf("Removed the hooks from %s. Restart it so it stops calling farol-host.\n", a.file)
+	}
+	if err := os.RemoveAll(store.dir); err != nil {
+		fmt.Printf("%s could not be removed: %v\n", store.dir, err)
+	}
+	if caches, err := os.UserCacheDir(); err == nil {
+		os.RemoveAll(filepath.Join(caches, "Farol", "Attachments"))
+		// Only when nothing else is in it.
+		os.Remove(filepath.Join(caches, "Farol"))
+	}
+	short := filepath.Join(filepath.Dir(program), "fh")
+	if link, _ := os.Readlink(short); link == "farol-host" || link == program {
+		os.Remove(short)
+	}
+	if err := os.Remove(program); err != nil {
+		fmt.Printf("%s could not be removed: %v\n", program, err)
+		os.Exit(1)
+	}
+	fmt.Println("farol-host is uninstalled. Your phone lists this machine until you forget it there.")
 }
