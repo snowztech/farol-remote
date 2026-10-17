@@ -131,9 +131,16 @@ type command struct {
 			Session string  `json:"session"`
 			Before  *string `json:"before"`
 		} `json:"conversation"`
-		Notify  *json.RawMessage `json:"notify"`
-		Options *json.RawMessage `json:"options"`
-		Task    *json.RawMessage `json:"task"`
+		// Where Apple can notify this phone.
+		Notify *struct {
+			Token   []byte   `json:"token"`
+			Sandbox bool     `json:"sandbox"`
+			Notices []string `json:"notices"`
+			Key     []byte   `json:"key"`
+		} `json:"notify"`
+		Activity *json.RawMessage `json:"activity"`
+		Options  *json.RawMessage `json:"options"`
+		Task     *json.RawMessage `json:"task"`
 	} `json:"action"`
 }
 
@@ -162,7 +169,7 @@ func event(name string, body any) []byte {
 }
 
 // What this host can do beyond screens and typing, by the names RemoteFeature gives them.
-var features = []string{"conversation", "requests", "commands", "attachments", "terminal"}
+var features = []string{"conversation", "requests", "commands", "attachments", "terminal", "notifications"}
 
 // helloEvent says the version this host speaks, what to call it, and what it can do.
 func helloEvent(name string) []byte {
@@ -229,6 +236,10 @@ const (
 	frameData byte = iota
 	frameJoined
 	frameLeft
+	frameOnline
+	frameOffline
+	// Have Apple notify one of this host's phones, which may not be connected at all.
+	framePush
 )
 
 func toPhone(id uint32, payload []byte) []byte {

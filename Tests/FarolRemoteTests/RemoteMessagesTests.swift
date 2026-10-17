@@ -184,10 +184,17 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
 
 @Test func farolHostsHelloReadsAsAHostThatDoesWhatAMacDoesForAgents() throws {
     // What `farol-host` writes, as its host/swift_test.go checks.
-    let hello = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1,"features":["conversation","requests","commands","attachments","terminal"],"name":"host"}}"#.utf8))
-    #expect(hello == .hello(version: 1, features: ["conversation", "requests", "commands", "attachments", "terminal"], name: "host"))
-    // Everything a Mac does for agents. Starting sessions, changes and notifications are a Mac's alone for now.
-    #expect(RemoteFeature.of(["conversation", "requests", "commands", "attachments", "terminal"]) == [.conversation, .requests, .commands, .attachments, .terminal])
+    let hello = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1,"features":["conversation","requests","commands","attachments","terminal","notifications"],"name":"host"}}"#.utf8))
+    #expect(hello == .hello(version: 1, features: ["conversation", "requests", "commands", "attachments", "terminal", "notifications"], name: "host"))
+    // Everything a Mac does for agents. Starting sessions and changes are a Mac's alone for now.
+    #expect(RemoteFeature.of(["conversation", "requests", "commands", "attachments", "terminal", "notifications"]) == [.conversation, .requests, .commands, .attachments, .terminal, .notifications])
+}
+
+@Test func farolHostsSealedNoticeOpensOnThePhone() throws {
+    // Sealed by host/notices.go with the key 0, 1, 2 … 31.
+    let sealed = try #require(Data(base64Encoded: "XY7yZl8nCg2Bdnh5HB+RRks5oaHiHWslhUrePMqqu+K3qJV4+9lvUabYuTkW5F9tjIyYs9F7RroskmPGsjA9sV6cHtl3P+x0HTvXzf7zLP2YsJpQcFr6x3cP2OvbOqgZ0LWgTiTS6sXbmsLxdx4="))
+    let content = NoticeBox.open(sealed, key: Data(0..<32))
+    #expect(content == RemoteNoticeContent(session: try #require(UUID(uuidString: "11111111-2222-3333-4444-555555555555")), name: "api", notice: .waiting))
 }
 
 @Test func farolHostsCommandsAndPicturesRead() throws {

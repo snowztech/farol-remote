@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/snowztech/farol-remote/host/agent"
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 // fakeTerminal is one session that remembers what was typed into it.
@@ -22,7 +24,11 @@ type fakeTerminal struct {
 const fakeSession = "11111111-2222-3333-4444-555555555555"
 
 func (f *fakeTerminal) sessions() []session {
-	return []session{{ID: fakeSession, Name: "demo", Status: "idle"}}
+	status := f.agent.status
+	if status == "" {
+		status = "idle"
+	}
+	return []session{{ID: fakeSession, Name: "demo", Status: status}}
 }
 
 func (f *fakeTerminal) screen(id string) (string, bool) {
@@ -64,6 +70,8 @@ type bench struct {
 	events  []string
 	refused string
 	paired  bool
+	// What the host asked the relay to have Apple show.
+	pushes [][]byte
 }
 
 func newBench(t *testing.T) *bench {
@@ -107,6 +115,10 @@ func (b *bench) read() {
 	for len(b.inbox) > 0 {
 		message := b.inbox[0]
 		b.inbox = b.inbox[1:]
+		if message[0] == framePush {
+			b.pushes = append(b.pushes, message[1:])
+			continue
+		}
 		var answer wireFrame
 		if err := json.Unmarshal(message[5:], &answer); err != nil {
 			b.t.Fatal(err)
@@ -441,7 +453,7 @@ func TestAPhoneAnswersWhatTheAgentAsksOnce(t *testing.T) {
 	b.ready()
 	asked := &agent.Request{ID: "toolu_1", Title: "Which database?", Choices: []agent.Choice{{Label: "SQLite"}, {Label: "Postgres"}}}
 	b.terminal.agent = agentState{status: "waiting", started: true, request: asked}
-	same(t, b.ask("w", watch(fakeSession)), conversationEvent(fakeSession, nil, latest, false), requestEvent(fakeSession, asked), screenEvent(fakeSession, "typed: "))
+	same(t, b.ask("w", watch(fakeSession)), sessionsEvent(b.terminal.sessions()), conversationEvent(fakeSession, nil, latest, false), requestEvent(fakeSession, asked), screenEvent(fakeSession, "typed: "))
 
 	same(t, b.ask("a", answer(fakeSession, "toolu_1", 2)), doneEvent("a"), requestEvent(fakeSession, nil), screenEvent(fakeSession, "typed: 2"))
 	// A second tap, before the agent moved on, is not typed into what it asks next.
@@ -518,5 +530,52 @@ func TestControlTakesALetterOnly(t *testing.T) {
 	same(t, b.ask("bad", fmt.Sprintf(`{"control":{"session":%q,"key":"Enter"}}`, fakeSession)), refusedEvent("bad", "Only Control with a letter can be sent."))
 	if got := strings.Join(b.terminal.typed, ","); got != "<C-c>" {
 		t.Fatalf("typed %s", got)
+	}
+}
+
+func TestAPhoneIsNotifiedWhenASessionWaitsEvenWithNoPhoneConnected(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	key := make([]byte, 32)
+	b.ask("n", `{"notify":{"token":"q80=","sandbox":true,"notices":["waiting"],"key":"`+base64.StdEncoding.EncodeToString(key)+`"}}`)
+	// The phone goes, as when the app is closed.
+	b.host.phones = map[uint32]*phone{}
+	b.tick()
+	b.terminal.agent.status = "working"
+	b.tick()
+	b.terminal.agent.status = "waiting"
+	b.tick()
+	b.terminal.agent.status = "done"
+	b.tick()
+	if len(b.pushes) != 1 {
+		t.Fatalf("asked for %d notifications", len(b.pushes))
+	}
+	var request map[string]string
+	json.Unmarshal(b.pushes[0], &request)
+	if request["token"] != "abcd" || request["notice"] != "waiting" || request["sandbox"] != "1" {
+		t.Fatalf("asked %v", request)
+	}
+	sealed, _ := base64.StdEncoding.DecodeString(request["sealed"])
+	aead, _ := chacha20poly1305.New(key)
+	plain, err := aead.Open(nil, sealed[:12], sealed[12:], nil)
+	if err != nil || string(plain) != `{"name":"demo","notice":"waiting","session":"`+fakeSession+`"}` {
+		t.Fatalf("sealed %s %v", plain, err)
+	}
+	// Kept for the next time the host starts.
+	if targets := b.host.store.pushTargets(); len(targets) != 1 || targets[0].Notices[0] != "waiting" {
+		t.Fatalf("kept %+v", targets)
+	}
+}
+
+func TestAForgottenPhoneIsNotNotified(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.ask("n", `{"notify":{"token":"q80=","sandbox":false}}`)
+	b.host.store.saveDevices(nil)
+	b.tick()
+	b.terminal.agent.status = "waiting"
+	b.tick()
+	if len(b.pushes) != 0 {
+		t.Fatalf("asked %s", b.pushes)
 	}
 }

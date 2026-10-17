@@ -33,6 +33,8 @@ type host struct {
 	pictures *inbox
 	// When phones were last sent what changed.
 	looked time.Time
+	// What each session was doing at the last look, to notify phones of a change. Nil before the first.
+	statuses map[string]string
 }
 
 type paste struct {
@@ -207,7 +209,12 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 	case a.Attach != nil:
 		h.attach(id, p, c.ID, a.Attach.Session, a.Attach.Attachment, a.Attach.Part, a.Attach.Parts, a.Attach.Data)
 	case a.Notify != nil:
-		// Where to notify this phone, which this host does not do yet.
+		n := a.Notify
+		if err := h.store.savePushTarget(pushTarget{Device: p.device.Key, Token: n.Token, Sandbox: n.Sandbox, Notices: n.Notices, Key: n.Key}); err != nil {
+			log.Printf("where to notify %q could not be kept: %v", p.device.Name, err)
+		}
+	case a.Activity != nil:
+		h.tell(id, p, refusedEvent(c.ID, "This machine does not keep a Live Activity up to date yet."))
 	case a.History != nil:
 		if text, ok := h.terminal.history(a.History.Session); ok {
 			h.tell(id, p, historyEvent(a.History.Session, lastLines(text, maxHistory)))
@@ -282,7 +289,11 @@ func returnDelay(text string, elapsed time.Duration) time.Duration {
 func (h *host) due(now time.Time) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	every := 400 * time.Millisecond
+	// Without a phone it only looks for a session to notify of.
+	every := time.Second
+	if len(h.phones) > 0 {
+		every = 400 * time.Millisecond
+	}
 	for _, p := range h.phones {
 		if p.terminal != "" {
 			every = 120 * time.Millisecond
@@ -295,11 +306,12 @@ func (h *host) due(now time.Time) bool {
 	return true
 }
 
-// tick looks again, as often as due says. It does nothing while no phone is connected.
+// tick looks again, as often as due says. Without a phone connected, only for a notification to send.
 func (h *host) tick() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if len(h.phones) == 0 {
+		h.notice(h.terminal.sessions())
 		return
 	}
 	// A phone removed with `farol-host forget` is cut off at once, and not at its next connection.
@@ -321,7 +333,9 @@ func (h *host) refresh() {
 			continue
 		}
 		if list == nil {
-			list = sessionsEvent(h.terminal.sessions())
+			sessions := h.terminal.sessions()
+			h.notice(sessions)
+			list = sessionsEvent(sessions)
 		}
 		if !bytes.Equal(list, p.sessions) {
 			p.sessions = list
