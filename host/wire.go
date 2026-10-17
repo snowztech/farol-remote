@@ -137,10 +137,15 @@ type command struct {
 			Sandbox bool     `json:"sandbox"`
 			Notices []string `json:"notices"`
 			Key     []byte   `json:"key"`
+			Starts  []byte   `json:"starts"`
 		} `json:"notify"`
-		Activity *json.RawMessage `json:"activity"`
-		Options  *json.RawMessage `json:"options"`
-		Task     *json.RawMessage `json:"task"`
+		// Where Apple can reach the Live Activity this phone started.
+		Activity *struct {
+			Token   []byte `json:"token"`
+			Sandbox bool   `json:"sandbox"`
+		} `json:"activity"`
+		Options *json.RawMessage `json:"options"`
+		Task    *json.RawMessage `json:"task"`
 		// A new session in a project from `options`, running the agent with that id from it, or a plain shell.
 		Open *struct {
 			Project string  `json:"project"`

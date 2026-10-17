@@ -629,3 +629,68 @@ func TestAPhoneClosesASessionOnce(t *testing.T) {
 		t.Fatalf("closed %v", b.terminal.closed)
 	}
 }
+
+// activities are the Live Activity frames the host asked the relay for, read back.
+func (b *bench) activities() []map[string]any {
+	var list []map[string]any
+	for _, push := range b.pushes {
+		var request map[string]any
+		json.Unmarshal(push, &request)
+		if request["activity"] != nil {
+			list = append(list, request)
+		}
+	}
+	return list
+}
+
+func TestALiveActivityStartsOnAClosedPhoneWhenSomethingGetsBusy(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	key := make([]byte, 32)
+	b.ask("n", `{"notify":{"token":"q80=","sandbox":false,"key":"`+base64.StdEncoding.EncodeToString(key)+`","starts":"7+8="}}`)
+	b.tick()
+	b.terminal.agent.status = "working"
+	b.tick()
+	if len(b.activities()) != 0 {
+		t.Fatal("started on a phone that has the app open")
+	}
+	b.host.phones = map[uint32]*phone{}
+	b.terminal.agent.status = "waiting"
+	b.tick()
+	b.terminal.agent.status = "working"
+	b.tick()
+	started := b.activities()
+	if len(started) != 1 || started[0]["token"] != "efef" || started[0]["activity"] != "start" || started[0]["urgent"] != true || started[0]["waiting"] != 1.0 {
+		t.Fatalf("asked %v", started)
+	}
+	sealed, _ := base64.StdEncoding.DecodeString(started[0]["sealed"].(string))
+	aead, _ := chacha20poly1305.New(key)
+	plain, err := aead.Open(nil, sealed[:12], sealed[12:], nil)
+	if err != nil || string(plain) != `[{"id":"`+fakeSession+`","name":"demo","status":"waiting"}]` {
+		t.Fatalf("sealed %s %v", plain, err)
+	}
+}
+
+func TestALiveActivityFollowsTheSessionsAndEndsWhenAllIsQuiet(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.tick()
+	b.ask("a", `{"activity":{"token":"q80=","sandbox":true}}`)
+	b.terminal.agent.status = "working"
+	b.tick()
+	b.terminal.agent.status = "waiting"
+	b.tick()
+	b.tick()
+	b.terminal.agent.status = "done"
+	b.tick()
+	var events []string
+	for _, a := range b.activities() {
+		events = append(events, fmt.Sprintf("%s %v %v", a["activity"], a["waiting"], a["urgent"]))
+	}
+	if got := strings.Join(events, ", "); got != "update 0 false, update 1 true, end 0 false" {
+		t.Fatalf("asked %s", got)
+	}
+	if len(b.host.store.activityTargets()) != 0 {
+		t.Fatal("an ended activity is still followed")
+	}
+}

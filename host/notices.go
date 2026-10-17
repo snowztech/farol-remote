@@ -24,6 +24,8 @@ type pushTarget struct {
 	Notices []string `json:"notices"`
 	// Seals which session a notification is about. Nil for a phone that sent none.
 	Key []byte `json:"key"`
+	// Where Apple can start a Live Activity on this phone with the app closed. Nil before iOS 17.2.
+	Starts []byte `json:"starts"`
 }
 
 func (s store) pushTargets() []pushTarget {
@@ -52,6 +54,7 @@ func (h *host) notice(sessions []session) {
 	if before == nil {
 		return
 	}
+	h.updateActivities(sessions)
 	devices := h.store.devices()
 	for _, s := range sessions {
 		if s.Status == before[s.ID] || (s.Status != "waiting" && s.Status != "done") {
@@ -83,11 +86,16 @@ func pushFrame(target pushTarget, s session) []byte {
 // sealNotice seals which session it is with a key only this host and the phone hold, as NoticeBox does:
 // ChaCha20-Poly1305, its nonce first. A notification goes with no connection open, so the channel's own encryption cannot carry it.
 func sealNotice(key []byte, s session) []byte {
+	plain, _ := json.Marshal(map[string]string{"session": s.ID, "name": s.Name, "notice": s.Status})
+	return seal(key, plain)
+}
+
+// seal is NoticeBox.seal: anything only the phone should read, with its key. Nil without a key that is one.
+func seal(key, plain []byte) []byte {
 	aead, err := chacha20poly1305.New(key)
 	if err != nil {
 		return nil
 	}
-	plain, _ := json.Marshal(map[string]string{"session": s.ID, "name": s.Name, "notice": s.Status})
 	nonce := make([]byte, aead.NonceSize())
 	rand.Read(nonce)
 	return aead.Seal(nonce, nonce, plain, nil)

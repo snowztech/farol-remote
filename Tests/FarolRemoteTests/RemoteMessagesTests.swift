@@ -190,6 +190,14 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     #expect(RemoteFeature.of(["conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions"]) == [.conversation, .requests, .commands, .attachments, .terminal, .notifications, .sessions])
 }
 
+@Test func farolHostsLiveActivityOpensOnThePhone() throws {
+    // Sealed by host/activity.go with the key 0, 1, 2 … 31, for a session that waits and one that works.
+    let state = RemoteActivityState(waiting: 1, working: 1, sealed: "O97235SuT/X904K6RGnhgiH4nxH4c9xGzuw6QCdTu4yDl22xMJplC1AnHpOJy6KalTJZDgxjHd469EGZ14FOsjQXXDcYWmm8kiLFIWc3ciuIPdIs8Sq3jQfRsag0K8ByUrYg4q5mN2wOyh8+2yaxkPUSyCmSWGx4KoQ5Rs1wEsDNAiOlWfLFDw2nEEg0KIqLejUwdUvBM1U3F8LhtDKTcjqru4cpvluhjmwA3pSrjftLGc4CLm+7CDg=")
+    let sessions = state.sessions(key: Data(0..<32))
+    #expect(sessions == [RemoteSession(id: try #require(UUID(uuidString: "11111111-2222-3333-4444-555555555555")), name: "api", branch: nil, status: .waiting),
+                         RemoteSession(id: try #require(UUID(uuidString: "22222222-3333-4444-5555-666666666666")), name: "web", branch: nil, status: .working)])
+}
+
 @Test func farolHostsNewSessionsRead() throws {
     let command = try #require(UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"))
     let session = try #require(UUID(uuidString: "22222222-3333-4444-5555-666666666666"))

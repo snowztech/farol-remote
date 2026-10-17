@@ -37,6 +37,8 @@ type host struct {
 	looked time.Time
 	// What each session was doing at the last look, to notify phones of a change. Nil before the first.
 	statuses map[string]string
+	// Phones sent a Live Activity start and not yet the started activity's address. Another start would only stack a second one.
+	starting map[string]bool
 }
 
 type paste struct {
@@ -69,7 +71,7 @@ type phone struct {
 
 func newHost(key deviceKey, store store, terminal terminal) *host {
 	return &host{key: key, store: store, terminal: terminal, send: func([]byte) {}, phones: map[uint32]*phone{}, seen: map[string]*seenCommands{},
-		transcripts: map[string]*agent.Transcript{}, pasted: map[string]paste{}, opened: map[string]string{}}
+		transcripts: map[string]*agent.Transcript{}, pasted: map[string]paste{}, opened: map[string]string{}, starting: map[string]bool{}}
 }
 
 // connected is called with each new connection to the relay, which numbers the phones again.
@@ -212,11 +214,11 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 		h.attach(id, p, c.ID, a.Attach.Session, a.Attach.Attachment, a.Attach.Part, a.Attach.Parts, a.Attach.Data)
 	case a.Notify != nil:
 		n := a.Notify
-		if err := h.store.savePushTarget(pushTarget{Device: p.device.Key, Token: n.Token, Sandbox: n.Sandbox, Notices: n.Notices, Key: n.Key}); err != nil {
+		if err := h.store.savePushTarget(pushTarget{Device: p.device.Key, Token: n.Token, Sandbox: n.Sandbox, Notices: n.Notices, Key: n.Key, Starts: n.Starts}); err != nil {
 			log.Printf("where to notify %q could not be kept: %v", p.device.Name, err)
 		}
 	case a.Activity != nil:
-		h.tell(id, p, refusedEvent(c.ID, "This machine does not keep a Live Activity up to date yet."))
+		h.activityStarted(p.device.Key, a.Activity.Token, a.Activity.Sandbox, h.terminal.sessions())
 	case a.History != nil:
 		if text, ok := h.terminal.history(a.History.Session); ok {
 			h.tell(id, p, historyEvent(a.History.Session, lastLines(text, maxHistory)))
