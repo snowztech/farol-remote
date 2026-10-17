@@ -17,9 +17,9 @@ import (
 
 // `farol-host setup` makes a server ready in one go: the agents report what they do, and the host runs by itself from boot.
 
-// An agent is a coding agent, the file it reads its hooks from, and which of its events mean what.
+// agentHooks are a coding agent, the file it reads its hooks from, and which of its events mean what.
 // Claude Code and Codex use the same shape for hooks, and these are the events Farol on a Mac uses for each.
-type agent struct {
+type agentHooks struct {
 	name   string
 	file   string
 	events []hookEvent
@@ -31,13 +31,19 @@ type hookEvent struct {
 	name, status, matcher string
 }
 
-func agents(home string) []agent {
-	return []agent{
+func agents(home string) []agentHooks {
+	return []agentHooks{
 		{name: "Claude Code", file: filepath.Join(env("CLAUDE_CONFIG_DIR", filepath.Join(home, ".claude")), "settings.json"), events: []hookEvent{
+			// Names the conversation's log the moment the agent starts, so a phone shows it before the first message.
+			// Compaction also starts a session event in the middle of a turn, so it must not clear the status.
+			{"SessionStart", "start", "startup|resume|clear"},
 			{"UserPromptSubmit", "working", ""},
 			{"PostToolUse", "working", ""},
 			// Notification also fires as an idle reminder after a finished turn. Only permission prompts and questions mean waiting.
 			{"Notification", "waiting", "permission_prompt|elicitation_dialog"},
+			// These say what is asked. They decide nothing, so the prompt shows as usual.
+			{"PermissionRequest", "waiting", ""},
+			{"PreToolUse", "waiting", "^AskUserQuestion$"},
 			{"Stop", "done", ""},
 			{"SessionEnd", "clear", ""},
 			{"SubagentStart", "subagent-start", ""},
@@ -45,7 +51,7 @@ func agents(home string) []agent {
 		}},
 		{name: "Codex", file: filepath.Join(env("CODEX_HOME", filepath.Join(home, ".codex")), "hooks.json"), note: "It asks you to approve the hooks the next time it starts.", events: []hookEvent{
 			// Compaction also starts a session event in the middle of a turn, so it must not clear the status.
-			{"SessionStart", "clear", "startup|resume|clear"},
+			{"SessionStart", "start", "startup|resume|clear"},
 			{"UserPromptSubmit", "working", ""},
 			{"PostToolUse", "working", ""},
 			{"PermissionRequest", "waiting", ""},
