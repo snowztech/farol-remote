@@ -11,6 +11,34 @@ public enum RemoteProtocol {
     public static let mismatch = "Farol on the Mac and Farol for iPhone are different versions. Update both to use this."
 }
 
+/// Something a host can do beyond showing its sessions' screens and typing into them, which every host does.
+/// A host says what it can do when it greets a phone, so the phone shows only what works there.
+public enum RemoteFeature: String, CaseIterable, Sendable {
+    /// An agent's conversation, read from its log.
+    case conversation
+    /// What a waiting agent asks, and answers to it.
+    case requests
+    /// What an agent takes after a slash.
+    case commands
+    /// Pictures sent from the phone.
+    case attachments
+    /// The terminal sent often while it is shown, and Control with a letter.
+    case terminal
+    /// Opening and closing sessions, and the projects and agents to open them with.
+    case sessions
+    /// The changes in a session's repository, and their diffs.
+    case changes
+    /// Notifications and a Live Activity when an agent waits or is done.
+    case notifications
+
+    /// What a host can do, from what it said. One that said nothing is a Mac from before hosts said, which did all of it.
+    /// A name this phone does not know is from a newer host, and is left out.
+    public static func of(_ names: [String]?) -> Set<RemoteFeature> {
+        guard let names else { return Set(allCases) }
+        return Set(names.compactMap(RemoteFeature.init(rawValue:)))
+    }
+}
+
 /// A key that isn't text, for a prompt that waits on Return or an arrow.
 public enum RemoteKey: String, Codable, CaseIterable, Sendable {
     case enter, escape, tab, up, down, left, right, backspace
@@ -316,7 +344,9 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
 /// Something the Mac tells the phone.
 /// The sessions and the screen are always sent in full, so a phone that missed some has nothing to replay.
 public enum RemoteEvent: Codable, Equatable, Sendable {
-    case hello(version: Int)
+    /// `features` is what the host can do, by `RemoteFeature` names, and `name` what to call it, like "Lucas's MacBook Pro".
+    /// A host from before them says neither.
+    case hello(version: Int, features: [String]? = nil, name: String? = nil)
     case sessions([RemoteSession])
     case screen(session: UUID, text: String)
     /// The lines above the screen, oldest first, as far back as fits in one message.

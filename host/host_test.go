@@ -182,7 +182,7 @@ func TestAPhoneThatScannedTheCodeSeesTheSessions(t *testing.T) {
 		t.Fatal("the code is still there after it was used")
 	}
 	b.connect()
-	same(t, b.ask("hello", `{"hello":{"version":1}}`), helloEvent(), sessionsEvent(b.terminal.sessions()))
+	same(t, b.ask("hello", `{"hello":{"version":1}}`), helloEvent(hostName()), sessionsEvent(b.terminal.sessions()))
 }
 
 func TestACodeWorksOnce(t *testing.T) {
@@ -239,7 +239,7 @@ func TestNothingIsDoneBeforeTheVersionsAreKnown(t *testing.T) {
 		t.Fatalf("told %v, typed %v", told, b.terminal.typed)
 	}
 	// A phone that speaks another version is told ours, and then nothing more.
-	same(t, b.ask("hello", `{"hello":{"version":2}}`), helloEvent())
+	same(t, b.ask("hello", `{"hello":{"version":2}}`), helloEvent(hostName()))
 	if len(b.host.phones) != 0 {
 		t.Fatal("a phone of another version was kept")
 	}

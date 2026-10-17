@@ -60,7 +60,8 @@ final class Probe {
         case .ready:
             print("# encrypted")
             ask(.hello(version: RemoteProtocol.version))
-        case .event(.hello(let version)): print("# mac speaks version \(version)")
+        case .event(.hello(let version, let features, let name)):
+            print("# \(name ?? "the host") speaks version \(version), and can do: \(features?.joined(separator: " ") ?? "everything")")
         case .event(.sessions(let list)):
             sessions = list
             print("# sessions")

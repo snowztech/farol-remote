@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"log"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -145,7 +146,7 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 	a := c.Action
 	switch {
 	case a.Hello != nil:
-		h.tell(id, p, helloEvent())
+		h.tell(id, p, helloEvent(hostName()))
 		if a.Hello.Version != protocolVersion {
 			delete(h.phones, id)
 			return
@@ -285,4 +286,12 @@ func (s *seenCommands) insert(id string) bool {
 		s.order = s.order[1:]
 	}
 	return true
+}
+
+// hostName is what a phone calls this machine: its hostname, or "Server" when it has none.
+func hostName() string {
+	if name, err := os.Hostname(); err == nil && name != "" {
+		return name
+	}
+	return "Server"
 }

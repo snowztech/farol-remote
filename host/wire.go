@@ -123,7 +123,10 @@ func event(name string, body any) []byte {
 	return text
 }
 
-func helloEvent() []byte { return event("hello", map[string]int{"version": protocolVersion}) }
+// helloEvent says the version this host speaks, what to call it, and what it can do beyond screens and typing, which is nothing yet.
+func helloEvent(name string) []byte {
+	return event("hello", map[string]any{"version": protocolVersion, "features": []string{}, "name": name})
+}
 
 func sessionsEvent(sessions []session) []byte {
 	if sessions == nil {
