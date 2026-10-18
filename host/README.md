@@ -1,6 +1,6 @@
 # The farol-host CLI
 
-> **Experimental.** It works, and the phone does everything with it that it does with Farol on the Mac. It stays experimental until a host proves itself to the relay and the pairing and the encryption have had an outside review. See [Not done yet](../ROADMAP.md#not-done-yet).
+> **Experimental.** It works, and the phone does everything with it that it does with Farol on the Mac. It stays experimental until [three things on the roadmap](../ROADMAP.md#before-host-leaves-experimental) are done.
 
 Runs Farol Remote on a server. `farol-host` lets a paired phone see and type into the tmux windows of a server, the way Farol on a Mac does for its own sessions. Your agents keep working, and you keep answering them, with the Mac closed or off.
 

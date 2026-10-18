@@ -10,7 +10,7 @@ In Farol on your Mac, open Settings → Remote, turn it on and show the code. Op
 
 The `farol-host` CLI runs your sessions on a server of your own that stays on, so the Mac can be closed. It exposes the tmux windows on that server, and the phone lists them by the server's name, next to your Mac's. The phone does everything with it that it does with Farol on the Mac.
 
-It is still experimental, until a host proves itself to the relay and the pairing and the encryption have had an outside review. The full list is under [Not done yet](ROADMAP.md#not-done-yet).
+It stays experimental until [three things on the roadmap](ROADMAP.md#before-host-leaves-experimental) are done.
 
 With tmux installed on the server:
 
