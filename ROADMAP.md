@@ -14,6 +14,17 @@ Farol won't run your agents for you. They run on your own Mac or server, and the
 - [ ] **The server forgets a phone that's gone.** When someone deletes the app, Apple refuses its notifications. The relay only logs that, so the server keeps asking to notify a phone that no longer exists. The relay should pass the refusal back so the server drops it.
 - [ ] **New tasks get their own worktree.** On the Mac, a new task gets its own branch and folder, so agents working in parallel never touch each other's files. On a server, a new session opens a tmux window in a folder. It should work like the Mac.
 
+## The relay
+
+relay.farol.sh is one small server on Railway. It keeps rooms in memory and stores nothing, and the Mac, the phone and `farol-host` all reconnect by themselves when it restarts. One server is enough for now. These keep it that way, and say what to do when it isn't.
+
+- [ ] **Know when it's down.** An outside check calls `/healthz` every minute and alerts by email or on the phone, from somewhere other than Railway, so an outage there can't hide itself.
+- [ ] **Never ship a broken one.** Railway's deploy check waits for `/healthz` before a new version replaces the running one.
+- [ ] **See it coming.** The log already prints connection counts when they change. When they get near the limit of 5000, it's time to grow.
+- [ ] **Grow on one machine first.** A bigger Railway instance and higher limits go a long way, since the relay only passes bytes along.
+- [ ] **Then more than one.** A host and its phones have to meet on the same server. Either send each room to a server picked from its name, or share rooms between servers through something like Redis. Still nothing stored.
+- [ ] **Browsers, if a web client happens.** Accept connections from the web app's address, and send Web Push next to Apple's notifications.
+
 ## Not covered yet
 
 These apply to the Mac and the server alike, and the [security page](docs/security.md#not-covered-yet) lists them too.
