@@ -1,6 +1,6 @@
 # Architecture
 
-Three programs take part in Remote: a host that owns the sessions, the relay in between, and the phone. The host is Farol on the Mac. A server running `farol-host` can take its place, as an experiment.
+Three programs take part in Remote: a host that owns the sessions, the relay in between, and the phone. The host is Farol on the Mac. A server running `farol-host` can take its place, and is still experimental.
 
 ![The Mac, the relay, the phone and the experimental server](diagrams/architecture.png)
 

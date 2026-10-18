@@ -6,9 +6,11 @@ Answer your coding agents from your phone. [Farol](https://github.com/snowztech/
 
 In Farol on your Mac, open Settings → Remote, turn it on and show the code. Open Farol on your iPhone and scan it. The sessions already open on the Mac appear on the phone, where you can read and answer them while the Mac stays on.
 
-## Experimental: an always-on host
+## Run agents on a server
 
-The `farol-host` CLI is an early preview for running sessions on your own server. It exposes the tmux windows on that server, and the phone lists them by the server's name, next to your Mac's.
+The `farol-host` CLI runs your sessions on a server of your own that stays on, so the Mac can be closed. It exposes the tmux windows on that server, and the phone lists them by the server's name, next to your Mac's. The phone does everything with it that it does with Farol on the Mac.
+
+It is still experimental, until a host proves itself to the relay and the pairing and the encryption have had an outside review. The full list is under [Not done yet](ROADMAP.md#not-done-yet).
 
 With tmux installed on the server:
 
