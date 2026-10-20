@@ -152,9 +152,10 @@ func TestAndroidPushWithoutFirebaseDoesNotAffectAPNs(t *testing.T) {
 }
 
 func TestAndroidPushesDoNotUseTheAppleRateLimit(t *testing.T) {
-	fcm, _, _ := firebase(t)
+	fcm, fcmCalls, _ := firebase(t)
 	apns, appleCalls := apple(t)
-	server := httptest.NewServer(newRelay(&pushers{apns: apns, fcm: fcm}).handler())
+	relay := newRelay(&pushers{apns: apns, fcm: fcm})
+	server := httptest.NewServer(relay.handler())
 	t.Cleanup(server.Close)
 	mac := dial(t, "ws"+strings.TrimPrefix(server.URL, "http"), "mac")
 	for i := 0; i < pushesPerMinute; i++ {
@@ -165,6 +166,23 @@ func TestAndroidPushesDoNotUseTheAppleRateLimit(t *testing.T) {
 	case <-appleCalls:
 	case <-time.After(2 * time.Second):
 		t.Fatal("Android pushes exhausted Apple's notification limit")
+	}
+	// The relay sends asynchronously. Consume every Firebase request before the
+	// fake server closes, or its bounded call channel can block HTTP handlers.
+	allCalls := time.After(5 * time.Second)
+	for i := 0; i < pushesPerMinute; i++ {
+		select {
+		case <-fcmCalls:
+		case <-allCalls:
+			t.Fatalf("only %d of %d Firebase pushes arrived", i, pushesPerMinute)
+		}
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for relay.sent.Load() != int64(pushesPerMinute+1) && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := relay.sent.Load(); got != int64(pushesPerMinute+1) {
+		t.Errorf("only %d of %d pushes completed", got, pushesPerMinute+1)
 	}
 }
 
