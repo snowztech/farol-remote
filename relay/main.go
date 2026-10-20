@@ -16,7 +16,7 @@ func main() {
 	if port := os.Getenv("PORT"); port != "" {
 		address = ":" + port
 	}
-	push, err := newPusher()
+	push, err := newPushers()
 	if err != nil {
 		log.Fatal(err)
 	}

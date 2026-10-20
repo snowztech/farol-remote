@@ -20,17 +20,21 @@ type room struct {
 	next   uint32
 }
 
+type pushSender interface {
+	send(context.Context, []byte, string) error
+}
+
 type relay struct {
 	mu    sync.Mutex
 	rooms map[string]*room
-	// Nil when the relay has no key from Apple, and then it sends no notifications.
-	push *pusher
+	// Nil when neither notification provider is configured.
+	push pushSender
 	door *door
 	// Counted for the log, which says how much the relay does and never for whom.
 	sent, failed atomic.Int64
 }
 
-func newRelay(push *pusher) *relay {
+func newRelay(push pushSender) *relay {
 	return &relay{rooms: map[string]*room{}, push: push, door: newDoor()}
 }
 
@@ -89,14 +93,23 @@ func (r *relay) serveMac(ctx context.Context, name string, mac *peer) {
 	}
 	r.mu.Unlock()
 
-	pushes, since := 0, time.Now()
+	apnsPushes, fcmPushes, since := 0, 0, time.Now()
 	mac.read(ctx, func(message []byte) {
 		if len(message) > 1 && message[0] == framePush && r.push != nil {
 			if time.Since(since) > time.Minute {
-				pushes, since = 0, time.Now()
+				apnsPushes, fcmPushes, since = 0, 0, time.Now()
 			}
-			if pushes++; pushes > pushesPerMinute {
-				return
+			_, _, android, _ := classifyPush(message[1:])
+			if android {
+				fcmPushes++
+				if fcmPushes > pushesPerMinute {
+					return
+				}
+			} else {
+				apnsPushes++
+				if apnsPushes > pushesPerMinute {
+					return
+				}
 			}
 			// Apple can be slow, and the Mac's other messages must not wait for it.
 			go func(payload []byte) {
