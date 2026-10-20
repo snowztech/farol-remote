@@ -4,6 +4,8 @@ Joins a Mac running Farol with the phones it paired, and passes their messages. 
 
 Farol uses `relay.farol.sh` unless you point it at your own in Settings → Remote.
 
+The public relay's [status page](https://status.pingbuddy.io/farol-relay) monitors `https://relay.farol.sh/healthz` from outside Railway.
+
 ## Run your own
 
 ```sh
