@@ -84,6 +84,10 @@ final class Probe {
             print("# waits on \(request.tool ?? "a question"): \(request.title)")
             request.choices.enumerated().forEach { print("  \($0.offset + 1). \($0.element.label)") }
         case .event(.request(_, nil)): print("# no longer waits")
+        case .event(.ask(_, let ask?)):
+            print("# asks \(ask.questions.count) question(s)")
+            ask.questions.forEach { print("  \($0.header): \($0.text)") }
+        case .event(.ask(_, nil)): print("# no longer asks")
         case .event(.attached(_, _, let path)): print("# attached at \(path)")
         case .event(.commands(_, let commands)): print("# commands " + commands.map { "/" + $0.name }.joined(separator: " "))
         case .event(.refused(_, let why)): print("! refused: \(why)")
