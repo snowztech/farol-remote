@@ -21,6 +21,12 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
         .conversation(session: session, before: nil), .conversation(session: session, before: "a1b2.0"),
         .changes(session: session), .diff(session: session, path: "Sources/App.swift"),
         .answer(session: session, request: "toolu_01", choice: 2),
+        .watch(session: session, asks: true),
+        .respondAsk(session: session, ask: UUID(), decision: .submit([
+            .init(question: 0, choices: [0]), .init(question: 1, choices: [0, 1], text: "Another"),
+        ])),
+        .respondAsk(session: session, ask: UUID(), decision: .discuss),
+        .respondAsk(session: session, ask: UUID(), decision: .inTerminal),
         .terminal(session: session, open: true), .control(session: session, key: "d"), .commands(session: session),
         .attach(session: session, attachment: UUID(), part: 1, parts: 3, data: Data([0xFF, 0xD8, 0xFF])), .forget,
     ] {
@@ -56,6 +62,11 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
             RemoteRequest.Choice(label: "SQLite", detail: "One file, nothing to run"), RemoteRequest.Choice(label: "Postgres"),
         ])),
         .request(session: session.id, request: nil),
+        .ask(session: session.id, ask: RemoteAsk(id: UUID(), questions: [
+            RemoteAsk.Question(text: "Which name?", header: "Name", options: [.init(label: "Farol"), .init(label: "Other")]),
+            RemoteAsk.Question(text: "Which checks?", header: "Checks", options: [.init(label: "Lint"), .init(label: "Tests")], multiSelect: true),
+        ])),
+        .ask(session: session.id, ask: nil),
         .attached(command: command, attachment: UUID(), path: "/Users/me/Library/Caches/Farol/Attachments/a.jpg"),
         .commands(session: session.id, commands: [
             RemoteAgentCommand(name: "compact", detail: "Summarize the conversation"), RemoteAgentCommand(name: "model", menu: true), RemoteAgentCommand(name: "farol", mention: true),
@@ -63,6 +74,12 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     ] {
         #expect(try roundTrip(event) == event)
     }
+}
+
+@Test func anOlderWatchStillDecodesWithoutAsks() throws {
+    let session = UUID()
+    let old = Data(#"{"watch":{"session":"\#(session.uuidString)"}}"#.utf8)
+    #expect(try JSONDecoder().decode(RemoteCommand.Action.self, from: old) == .watch(session: session))
 }
 
 @Test func aMessageFromANewerVersionIsNotMistakenForAnother() {
@@ -176,7 +193,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
 @Test func aHostSaysWhatItCanDo() throws {
     #expect(RemoteFeature.of(["conversation", "pictures-in-3d", "terminal"]) == [.conversation, .terminal])
     #expect(RemoteFeature.of([]).isEmpty)
-    #expect(RemoteFeature.of(nil) == Set(RemoteFeature.allCases))
+    #expect(RemoteFeature.of(nil) == Set(RemoteFeature.allCases).subtracting([.questionForms]))
     // A host from before features greets as it always did, and reads as one that said nothing.
     let old = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1}}"#.utf8))
     #expect(old == .hello(version: 1))
@@ -187,7 +204,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     let hello = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1,"features":["conversation","requests","commands","attachments","terminal","notifications","sessions","changes"],"name":"host"}}"#.utf8))
     #expect(hello == .hello(version: 1, features: ["conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions", "changes"], name: "host"))
     // Everything a Mac does.
-    #expect(RemoteFeature.of(["conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions", "changes"]) == Set(RemoteFeature.allCases))
+    #expect(RemoteFeature.of(["conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions", "changes"]) == Set(RemoteFeature.allCases).subtracting([.questionForms]))
 }
 
 @Test func farolHostsChangesRead() throws {
