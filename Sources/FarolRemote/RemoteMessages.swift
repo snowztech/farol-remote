@@ -18,6 +18,8 @@ public enum RemoteFeature: String, CaseIterable, Sendable {
     case conversation
     /// What a waiting agent asks, and answers to it.
     case requests
+    /// Complete held question forms, including multiple picks, custom words and discussing the question instead.
+    case questionForms
     /// What an agent takes after a slash.
     case commands
     /// Pictures sent from the phone.
@@ -31,10 +33,10 @@ public enum RemoteFeature: String, CaseIterable, Sendable {
     /// Notifications and a Live Activity when an agent waits or is done.
     case notifications
 
-    /// What a host can do, from what it said. One that said nothing is a Mac from before hosts said, which did all of it.
+    /// What a host can do, from what it said. One that said nothing is a Mac from before hosts said, which did legacy operations.
     /// A name this phone does not know is from a newer host, and is left out.
     public static func of(_ names: [String]?) -> Set<RemoteFeature> {
-        guard let names else { return Set(allCases) }
+        guard let names else { return Set(allCases).subtracting([.questionForms]) }
         return Set(names.compactMap(RemoteFeature.init(rawValue:)))
     }
 }
@@ -191,6 +193,25 @@ public struct RemoteAsk: Codable, Equatable, Sendable {
 
     public var id: UUID
     public var questions: [Question]
+
+    /// Positions refer to this form, so labels remain presentation rather than wire identifiers.
+    public struct Answer: Codable, Equatable, Sendable {
+        public var question: Int
+        public var choices: [Int]
+        public var text: String?
+
+        public init(question: Int, choices: [Int] = [], text: String? = nil) {
+            self.question = question
+            self.choices = choices
+            self.text = text
+        }
+    }
+
+    public enum Decision: Codable, Equatable, Sendable {
+        case submit([Answer])
+        case discuss
+        case inTerminal
+    }
 
     public init(id: UUID, questions: [Question]) {
         self.id = id
@@ -350,8 +371,8 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         /// Picks the answer numbered `choice`, from 1, as the agent numbers them. Only while `request` is still the one waiting,
         /// so a tap that arrives late is refused rather than typed into whatever the agent shows next.
         case answer(session: UUID, request: String, choice: Int)
-        /// Submits a held form as one answer per question text. The host refuses an old form id or an incomplete set.
-        case answerAsk(session: UUID, ask: UUID, answers: [String: String])
+        /// Acts on exactly the held form named by `ask`. A stale decision is refused.
+        case respondAsk(session: UUID, ask: UUID, decision: RemoteAsk.Decision)
         /// The phone shows the session's terminal, or stopped showing it. While it does, the host sends its screen often.
         /// A phone that never says gets the screen as before, which is how a host tells an older phone apart.
         case terminal(session: UUID, open: Bool)
