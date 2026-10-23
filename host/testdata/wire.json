@@ -44,6 +44,7 @@
     "right",
     "backspace",
     "shiftTab",
+    "shiftLeft",
     "interrupt"
   ]
 }

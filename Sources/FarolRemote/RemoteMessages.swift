@@ -46,6 +46,8 @@ public enum RemoteKey: String, Codable, CaseIterable, Sendable {
     case enter, escape, tab, up, down, left, right, backspace
     /// Shift-Tab, which Claude Code takes to switch between its modes.
     case shiftTab
+    /// Left with Shift held, which Codex takes to open the questions it asked while it works.
+    case shiftLeft
     /// Control-C.
     case interrupt
 }
