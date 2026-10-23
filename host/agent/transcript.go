@@ -28,6 +28,8 @@ type Message struct {
 	Tool string `json:"tool,omitempty"`
 	// A command in full, or an edit as a unified diff.
 	Detail string `json:"detail,omitempty"`
+	// How a tool call ended when not as asked: "stopped" or "failed". Empty while it runs or once it did what it was asked.
+	Outcome string `json:"outcome,omitempty"`
 }
 
 // A Transcript is the conversation an agent logs, as Claude Code or Codex writes it: one JSON record per line, appended as the session goes.

@@ -85,6 +85,8 @@ public enum RemotePlace: Codable, Equatable, Sendable {
     case before(String)
     /// After the message with this id, which the agent just wrote.
     case after(String)
+    /// In place of messages already here with the same ids, like a tool whose result came after it.
+    case changed
 }
 
 /// A session's conversation as far as the phone has it, put together from the host's `conversation` events.
@@ -109,6 +111,10 @@ public struct RemoteConversation: Equatable, Sendable {
         case .after(let id):
             guard messages.last?.id == id else { return false }
             messages += new
+        case .changed:
+            // One the phone no longer has, scrolled out of what it kept, is left out.
+            let changed = Dictionary(new.map { ($0.id, $0) }) { $1 }
+            messages = messages.map { changed[$0.id] ?? $0 }
         }
         return true
     }
@@ -133,13 +139,23 @@ public struct RemoteMessage: Codable, Equatable, Identifiable, Sendable {
     public var tool: String?
     /// What a tool did in full: a command, or an edit as a unified diff.
     public var detail: String?
+    /// How a tool call ended, when not as asked. Nil while it runs, once it did what it was asked, and from a host that does not say.
+    public var outcome: Outcome?
 
-    public init(id: String, role: Role, text: String, tool: String? = nil, detail: String? = nil) {
+    public enum Outcome: String, Codable, Sendable {
+        /// You stopped it: said no when the agent asked to run it, or interrupted it while it ran.
+        case stopped
+        /// It ran and failed, like a command that exited with an error.
+        case failed
+    }
+
+    public init(id: String, role: Role, text: String, tool: String? = nil, detail: String? = nil, outcome: Outcome? = nil) {
         self.id = id
         self.role = role
         self.text = text
         self.tool = tool
         self.detail = detail
+        self.outcome = outcome
     }
 }
 

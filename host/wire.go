@@ -213,8 +213,10 @@ func historyEvent(session, text string) []byte {
 	return event("history", typed{session, text})
 }
 
-// Where messages go in the conversation a phone has: in place of all of it, or before or after one message.
+// Where messages go in the conversation a phone has: in place of all of it, before or after one message, or in place of the ones with their ids.
 var latest = map[string]struct{}{"latest": {}}
+
+var changed = map[string]struct{}{"changed": {}}
 
 func placeBefore(id string) any { return map[string]one[string]{"before": {id}} }
 
