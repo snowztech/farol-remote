@@ -58,6 +58,7 @@ func TestWritesEveryEventAsAPhoneReadsIt(t *testing.T) {
 			{ID: "a2.0", Role: agent.Tool, Text: "npm test", Tool: "Bash", Detail: "npm test"},
 		}, placeAfter("u1.0"), false),
 		conversationEvent(session, nil, latest, true),
+		conversationEvent(session, []agent.Message{{ID: "a2.0", Role: agent.Tool, Text: "npm test", Tool: "Bash", Detail: "npm test", Outcome: "failed"}}, changed, false),
 		diffEvent(session, "b.go", "@@ -1 +1 @@\n-a\n+b\n"),
 		requestEvent(session, &agent.Request{ID: "toolu_01", Title: "Which test?", Choices: []agent.Choice{{Label: "store", Detail: "the order test"}, {Label: "all"}}}),
 		requestEvent(session, nil),

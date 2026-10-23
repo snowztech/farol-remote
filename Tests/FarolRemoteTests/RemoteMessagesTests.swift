@@ -287,3 +287,15 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     let before = try decode(#"{"conversation":{"session":"11111111-2222-3333-4444-555555555555","messages":[],"place":{"before":{"_0":"x"}},"more":false}}"#)
     #expect(before == .conversation(session: session, messages: [], place: .before("x"), more: false))
 }
+
+@Test func aToolThatEndedChangesInPlace() {
+    var conversation = RemoteConversation()
+    let run = RemoteMessage(id: "t1", role: .tool, text: "touch a", tool: "Bash")
+    _ = conversation.take([RemoteMessage(id: "u1", role: .you, text: "go"), run], at: .latest, more: false)
+    var declined = run
+    declined.outcome = .stopped
+    let taken = conversation.take([declined, RemoteMessage(id: "gone", role: .tool, text: "x")], at: .changed, more: false)
+    #expect(taken)
+    #expect(conversation.messages.map(\.id) == ["u1", "t1"], "one the phone does not have is left out")
+    #expect(conversation.messages.last?.outcome == .stopped)
+}

@@ -37,6 +37,8 @@ private struct Wire: Codable {
             RemoteMessage(id: "a2.0", role: .tool, text: "npm test", tool: "Bash", detail: "npm test"),
         ], place: .after("u1.0"), more: false),
         .conversation(session: session, messages: [], place: .latest, more: true),
+        .conversation(session: session, messages: [RemoteMessage(id: "a2.0", role: .tool, text: "npm test", tool: "Bash", detail: "npm test", outcome: .failed)],
+                      place: .changed, more: false),
         .diff(session: session, path: "b.go", text: "@@ -1 +1 @@\n-a\n+b\n"),
         .request(session: session, request: RemoteRequest(id: "toolu_01", tool: nil, title: "Which test?",
                                                           choices: [.init(label: "store", detail: "the order test"), .init(label: "all")])),

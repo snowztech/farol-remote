@@ -42,7 +42,7 @@ var controlKey = regexp.MustCompile(`^C-[a-z]$`)
 // The names tmux gives the keys a phone can press.
 var tmuxKeys = map[string]string{
 	"enter": "Enter", "escape": "Escape", "tab": "Tab", "backspace": "BSpace",
-	"up": "Up", "down": "Down", "left": "Left", "right": "Right", "shiftTab": "BTab", "interrupt": "C-c",
+	"up": "Up", "down": "Down", "left": "Left", "right": "Right", "shiftTab": "BTab", "shiftLeft": "S-Left", "interrupt": "C-c",
 }
 
 // tmux runs the sessions. Every tmux window on this machine is one the phone can see, as each tab of Farol on a Mac is, and its active pane is the one it reads and types into.

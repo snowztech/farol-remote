@@ -28,6 +28,7 @@
     "{\"changes\":{\"files\":[{\"added\":1,\"binary\":false,\"oldPath\":\"a.go\",\"path\":\"b.go\",\"removed\":2,\"status\":\"renamed\"},{\"added\":0,\"binary\":true,\"path\":\"logo.png\",\"removed\":0,\"status\":\"added\"}],\"scope\":\"Uncommitted\",\"session\":\"11111111-2222-3333-4444-555555555555\"}}",
     "{\"conversation\":{\"messages\":[{\"id\":\"a1.0\",\"role\":\"agent\",\"text\":\"Done.\"},{\"detail\":\"npm test\",\"id\":\"a2.0\",\"role\":\"tool\",\"text\":\"npm test\",\"tool\":\"Bash\"}],\"more\":false,\"place\":{\"after\":{\"_0\":\"u1.0\"}},\"session\":\"11111111-2222-3333-4444-555555555555\"}}",
     "{\"conversation\":{\"messages\":[],\"more\":true,\"place\":{\"latest\":{}},\"session\":\"11111111-2222-3333-4444-555555555555\"}}",
+    "{\"conversation\":{\"messages\":[{\"detail\":\"npm test\",\"id\":\"a2.0\",\"outcome\":\"failed\",\"role\":\"tool\",\"text\":\"npm test\",\"tool\":\"Bash\"}],\"more\":false,\"place\":{\"changed\":{}},\"session\":\"11111111-2222-3333-4444-555555555555\"}}",
     "{\"diff\":{\"path\":\"b.go\",\"session\":\"11111111-2222-3333-4444-555555555555\",\"text\":\"@@ -1 +1 @@\\n-a\\n+b\\n\"}}",
     "{\"request\":{\"request\":{\"choices\":[{\"detail\":\"the order test\",\"label\":\"store\"},{\"label\":\"all\"}],\"id\":\"toolu_01\",\"title\":\"Which test?\"},\"session\":\"11111111-2222-3333-4444-555555555555\"}}",
     "{\"request\":{\"session\":\"11111111-2222-3333-4444-555555555555\"}}",
@@ -44,6 +45,7 @@
     "right",
     "backspace",
     "shiftTab",
+    "shiftLeft",
     "interrupt"
   ]
 }
