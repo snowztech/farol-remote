@@ -122,6 +122,16 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     #expect(sealed.range(of: Data("flaky".utf8)) == nil)
 }
 
+@Test func aNotificationSaysWhatTheSessionAsks() throws {
+    let key = NoticeBox.newKey()
+    let content = RemoteNoticeContent(session: UUID(), name: "shelf", notice: .waiting, asking: "Run touch probe.txt? " + String(repeating: "x", count: 200))
+    #expect(content.asking?.count == RemoteActivityState.askingLimit)
+    #expect(NoticeBox.open(try #require(NoticeBox.seal(content, key: key)), key: key) == content)
+    // From an older host, which does not say.
+    let older = try JSONDecoder().decode(RemoteNoticeContent.self, from: Data(#"{"session":"11111111-2222-3333-4444-555555555555","name":"api","notice":"waiting"}"#.utf8))
+    #expect(older.asking == nil)
+}
+
 @Test func aPushRequestCarriesWhatIsSealed() throws {
     let message = RelayFrame.push(token: Data([0xAB]), sandbox: false, notice: .done, sealed: Data([1, 2, 3]))
     let request = try JSONDecoder().decode([String: String].self, from: message.dropFirst())
@@ -143,6 +153,24 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     #expect(!(state.sealed ?? "").contains("flaky"))
     #expect(try roundTrip(state) == state)
     #expect(RemoteActivityState([], key: key).isQuiet)
+}
+
+@Test func aLiveActivitySaysWhatAWaitingSessionAsksWhileThereIsRoom() {
+    let key = NoticeBox.newKey()
+    let sessions = [
+        RemoteSession(id: UUID(), name: "shelf", branch: nil, status: .waiting, agent: "codex", asking: "Run touch probe.txt?"),
+        RemoteSession(id: UUID(), name: "api", branch: nil, status: .working, asking: "left from before"),
+    ]
+    let shown = RemoteActivityState(sessions, key: key).sessions(key: key)
+    #expect(shown.map(\.asking) == ["Run touch probe.txt?", nil])
+    #expect(shown.allSatisfy { $0.agent == nil })
+    // Names and questions in wide characters would not fit the relay's 2000, so the questions are left out.
+    let wide = (0..<4).map { _ in
+        RemoteSession(id: UUID(), name: String(repeating: "🚨", count: 60), branch: nil, status: .waiting, asking: String(repeating: "🚨", count: 80))
+    }
+    let state = RemoteActivityState(wide, key: key)
+    #expect((state.sealed?.count ?? .max) <= 2000)
+    #expect(state.sessions(key: key).count == 4 && state.sessions(key: key).allSatisfy { $0.asking == nil })
 }
 
 @Test func aLiveActivityPushCarriesWhatTheRelayExpects() throws {

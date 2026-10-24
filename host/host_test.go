@@ -711,3 +711,31 @@ func TestAPhoneThatForgetsTheHostIsNoLongerLetInOrNotified(t *testing.T) {
 		t.Fatal("the phone is still known")
 	}
 }
+
+func TestANoticeAndALiveActivitySayWhatAWaitingSessionAsks(t *testing.T) {
+	key := make([]byte, 32)
+	open := func(sealed []byte) string {
+		aead, _ := chacha20poly1305.New(key)
+		plain, err := aead.Open(nil, sealed[:12], sealed[12:], nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(plain)
+	}
+	waiting := session{ID: fakeSession, Name: "shelf", Status: "waiting", Agent: "codex", Asking: "Run touch probe.txt?"}
+	if got := open(sealNotice(key, waiting)); got != `{"asking":"Run touch probe.txt?","name":"shelf","notice":"waiting","session":"`+fakeSession+`"}` {
+		t.Fatalf("sealed %s", got)
+	}
+	working := session{ID: fakeSession, Name: "api", Status: "working", Asking: "left from before"}
+	sealed, _ := base64.StdEncoding.DecodeString(newActivityState([]session{waiting, working}, key).sealed)
+	if got := open(sealed); got != `[{"id":"`+fakeSession+`","name":"shelf","status":"waiting","asking":"Run touch probe.txt?"},{"id":"`+fakeSession+`","name":"api","status":"working"}]` {
+		t.Fatalf("sealed %s", got)
+	}
+	// Names and questions in wide characters would not fit the relay's 2000, so the questions are left out.
+	wide := session{ID: fakeSession, Name: strings.Repeat("🚨", 60), Status: "waiting", Asking: strings.Repeat("🚨", 80)}
+	state := newActivityState([]session{wide, wide, wide, wide}, key)
+	sealed, _ = base64.StdEncoding.DecodeString(state.sealed)
+	if len(state.sealed) > 2000 || strings.Contains(open(sealed), "asking") {
+		t.Fatalf("sealed %d characters", len(state.sealed))
+	}
+}

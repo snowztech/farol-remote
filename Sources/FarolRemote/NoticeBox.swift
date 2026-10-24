@@ -1,16 +1,19 @@
 import CryptoKit
 import Foundation
 
-/// What a notification says once the phone has opened it: which session, and its name.
+/// What a notification says once the phone has opened it: which session, its name, and what it asks when it waits.
 public struct RemoteNoticeContent: Codable, Equatable, Sendable {
     public var session: UUID
     public var name: String
     public var notice: RemoteNotice
+    /// Nil from an older host, or when it does not know.
+    public var asking: String?
 
-    public init(session: UUID, name: String, notice: RemoteNotice) {
+    public init(session: UUID, name: String, notice: RemoteNotice, asking: String? = nil) {
         self.session = session
         self.name = name
         self.notice = notice
+        self.asking = asking.map { String($0.prefix(RemoteActivityState.askingLimit)) }
     }
 }
 

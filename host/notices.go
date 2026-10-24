@@ -86,8 +86,22 @@ func pushFrame(target pushTarget, s session) []byte {
 // sealNotice seals which session it is with a key only this host and the phone hold, as NoticeBox does:
 // ChaCha20-Poly1305, its nonce first. A notification goes with no connection open, so the channel's own encryption cannot carry it.
 func sealNotice(key []byte, s session) []byte {
-	plain, _ := json.Marshal(map[string]string{"session": s.ID, "name": s.Name, "notice": s.Status})
+	content := map[string]string{"session": s.ID, "name": s.Name, "notice": s.Status}
+	if s.Status == "waiting" && s.Asking != "" {
+		content["asking"] = shorten(s.Asking, askingLimit)
+	}
+	plain, _ := json.Marshal(content)
 	return seal(key, plain)
+}
+
+// askingLimit is RemoteActivityState.askingLimit: enough of what a session asks for a line on the lock screen.
+const askingLimit = 80
+
+func shorten(text string, runes int) string {
+	if r := []rune(text); len(r) > runes {
+		return string(r[:runes])
+	}
+	return text
 }
 
 // seal is NoticeBox.seal: anything only the phone should read, with its key. Nil without a key that is one.
