@@ -262,8 +262,59 @@ func claudeTool(name string, input map[string]any, folder, id string) Message {
 		message.Text = or(str("description"), name)
 	case "TodoWrite":
 		message.Text = "Updated the to-do list"
+	case "AskUserQuestion":
+		questions, _ := input["questions"].([]any)
+		if asked := question(questions, id); asked != nil {
+			return *asked
+		}
+		message.Text = name
 	default:
 		message.Text = or(str("skill"), str("description"), name)
+	}
+	return message
+}
+
+// question is a question tool's call, as one row: the first question as its line, and every question with its answers as its detail.
+// Claude Code writes `question` and options with a `label`, Codex `question` or `title` and options as labels or plain words.
+func question(questions []any, id string) *Message {
+	text := func(q map[string]any) string {
+		for _, key := range []string{"question", "title", "text"} {
+			if value, _ := q[key].(string); strings.TrimSpace(value) != "" {
+				return strings.TrimSpace(value)
+			}
+		}
+		return ""
+	}
+	var first string
+	var detail []string
+	for _, each := range questions {
+		q, _ := each.(map[string]any)
+		asked := text(q)
+		if asked == "" {
+			continue
+		}
+		if first == "" {
+			first = asked
+		}
+		lines := []string{asked}
+		options, _ := q["options"].([]any)
+		for _, option := range options {
+			label, _ := option.(string)
+			if object, ok := option.(map[string]any); ok {
+				label, _ = object["label"].(string)
+			}
+			if label != "" {
+				lines = append(lines, "· "+label)
+			}
+		}
+		detail = append(detail, strings.Join(lines, "\n"))
+	}
+	if first == "" {
+		return nil
+	}
+	message := &Message{ID: id, Role: Tool, Text: first, Tool: "Question"}
+	if all := strings.Join(detail, "\n\n"); all != first {
+		message.Detail = all
 	}
 	return message
 }
