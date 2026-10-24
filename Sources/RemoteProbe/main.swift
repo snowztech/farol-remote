@@ -2,7 +2,7 @@ import FarolRemote
 import Foundation
 
 // A phone in a terminal: `RemoteProbe <pairing link>` pairs as a scan would.
-// Then it takes `watch <n>`, `send <text>`, `key <name>` and `quit` on standard input.
+// Then it takes `watch <n>`, `send <text>`, `key <name>`, `options`, `task <project> <agent> <text>` and `quit` on standard input.
 
 final class Probe {
     private let phone = DeviceKey()
@@ -10,6 +10,8 @@ final class Probe {
     private var link: PhoneLink
     private var pairing: PairingRequest?
     private var sessions: [RemoteSession] = []
+    private var projects: [RemoteChoice] = []
+    private var agents: [RemoteChoice] = []
     private var watched: UUID?
     private let connection: RelayConnection
 
@@ -66,11 +68,15 @@ final class Probe {
             sessions = list
             print("# sessions")
             for (place, session) in list.enumerated() {
-                print("  \(place + 1)  \(session.status.rawValue)  \(session.name)  \(session.branch ?? "")")
+                print("  \(place + 1)  \(session.status.rawValue)  \(session.name)  \(session.agent ?? "")  \(session.branch ?? "")")
+                if let asking = session.asking { print("     asks: \(asking)") }
             }
         case .event(.screen(_, let text)): print("# screen\n\(text)\n# end")
         case .event(.history(_, let text)): print("# history\n\(text)\n# end")
-        case .event(.options(let projects, let agents, _)): print("# projects \(projects.map(\.name)) agents \(agents.map(\.name))")
+        case .event(.options(let projects, let agents, _)):
+            self.projects = projects
+            self.agents = agents
+            print("# projects \(projects.map(\.name)) agents \(agents.map(\.name))")
         case .event(.done): print("# done")
         case .event(.opened(_, let session)): print("# opened \(session)")
         case .event(.changes(_, let scope, let files)):
@@ -108,10 +114,18 @@ final class Probe {
         case ("key", let name?):
             guard let key = RemoteKey(rawValue: name), let watched else { return print("! watch a session first, then a key name") }
             ask(.key(session: watched, key: key))
+        case ("options", _):
+            ask(.options)
+        case ("task", let rest?):
+            // task <project number> <agent number> <what to do>, by the numbers `options` listed.
+            let parts = rest.split(separator: " ", maxSplits: 2).map(String.init)
+            guard parts.count == 3, let project = Int(parts[0]), let agent = Int(parts[1]),
+                  projects.indices.contains(project - 1), agents.indices.contains(agent - 1) else { return print("! options first, then task <project> <agent> <what to do>") }
+            ask(.task(project: projects[project - 1].id, agent: agents[agent - 1].id, text: parts[2]))
         case ("quit", _):
             exit(0)
         default:
-            print("! watch <n> | send <text> | key <name> | quit")
+            print("! watch <n> | send <text> | key <name> | options | task <project> <agent> <text> | quit")
         }
     }
 }
