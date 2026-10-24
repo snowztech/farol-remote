@@ -203,7 +203,7 @@ func TestWritesEventsAsSwiftReadsThem(t *testing.T) {
 	}
 	ours := [][]byte{
 		nil,
-		sessionsEvent([]session{{sessionID, "n", &branch, "idle"}, {sessionID, "n", nil, "working"}}),
+		sessionsEvent([]session{{ID: sessionID, Name: "n", Branch: &branch, Status: "idle"}, {ID: sessionID, Name: "n", Status: "working"}}),
 		screenEvent(sessionID, "s"),
 		historyEvent(sessionID, "h"),
 		doneEvent(id),

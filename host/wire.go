@@ -177,6 +177,10 @@ type session struct {
 	Name   string  `json:"name"`
 	Branch *string `json:"branch,omitempty"`
 	Status string  `json:"status"`
+	// The agent running there, like "claude" or "codex". Empty for a shell.
+	Agent string `json:"agent,omitempty"`
+	// What it waits on, in one line, when its hook said.
+	Asking string `json:"asking,omitempty"`
 }
 
 // What the host tells the phone. The sessions and the screen are always sent in full, so a phone that missed some has nothing to replay.

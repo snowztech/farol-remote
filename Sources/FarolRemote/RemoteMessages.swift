@@ -68,12 +68,18 @@ public struct RemoteSession: Codable, Equatable, Identifiable, Sendable {
     public var name: String
     public var branch: String?
     public var status: RemoteStatus
+    /// The agent running there, like "claude" or "codex". Nil for a shell, and from a host that does not say.
+    public var agent: String?
+    /// What it waits on, in one line, so the list says which session needs what without opening each.
+    public var asking: String?
 
-    public init(id: UUID, name: String, branch: String?, status: RemoteStatus) {
+    public init(id: UUID, name: String, branch: String?, status: RemoteStatus, agent: String? = nil, asking: String? = nil) {
         self.id = id
         self.name = name
         self.branch = branch
         self.status = status
+        self.agent = agent
+        self.asking = asking
     }
 }
 

@@ -28,6 +28,8 @@ private struct Wire: Codable {
     let events: [RemoteEvent] = [
         .options(projects: [RemoteChoice(id: "/home/me/shelf", name: "shelf")], agents: [RemoteChoice(id: "claude", name: "Claude Code")], agent: "claude"),
         .opened(command: command, session: session),
+        .sessions([RemoteSession(id: session, name: "shelf", branch: "main", status: .waiting, agent: "codex", asking: "Run touch probe.txt?"),
+                   RemoteSession(id: command, name: "zsh", branch: nil, status: .idle)]),
         .changes(session: session, scope: "Uncommitted", files: [
             RemoteChange(path: "b.go", oldPath: "a.go", status: .renamed, added: 1, removed: 2),
             RemoteChange(path: "logo.png", status: .added, added: 0, removed: 0, binary: true),
