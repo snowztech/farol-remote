@@ -92,3 +92,11 @@ import Testing
     let prompt = try #require(Prompt(screen: "Should I submit the form?\n› 1. Yes\n  2. No\n\nPress enter to confirm or esc to cancel"))
     #expect(prompt.title == "Should I submit the form?")
 }
+
+@Test func saysWhatAScreenAsksInOneLine() {
+    #expect(Prompt.asking(in: Screens.codexApproval) == "Run touch /Users/lucas/farol-probe-delete-me.txt && echo ok?")
+    #expect(Prompt.asking(in: Screens.claudePermission) == "Run touch probe.txt?")
+    #expect(Prompt.asking(in: Screens.codexQuestion) == "Which color?")
+    #expect(Prompt.asking(in: Screens.codexQueued) == "A question")
+    #expect(Prompt.asking(in: Screens.claudeIdle) == nil)
+}

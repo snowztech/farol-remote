@@ -129,6 +129,15 @@ public struct Prompt: Equatable, Sendable {
         command = words.command
     }
 
+    /// What a screen asks, in one line for a list: the command its menu would run, or its question, or how many questions Codex holds.
+    /// Nil when the screen asks nothing.
+    public static func asking(in screen: String) -> String? {
+        if let prompt = Prompt(screen: screen) {
+            return prompt.command.flatMap { $0.split(separator: "\n").first }.map { "Run \($0)?" } ?? (prompt.title.isEmpty ? nil : prompt.title)
+        }
+        return queued(in: screen).map { $0 == 1 ? "A question" : "\($0) questions" }
+    }
+
     /// Codex keeps the questions it asks while it works behind Shift-Left: "? 2 questions · 7s" over "⇧← to answer".
     public static func queued(in screen: String) -> Int? {
         let rows = screen.split(separator: "\n").suffix(24)
