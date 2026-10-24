@@ -107,6 +107,7 @@ func needsYou(s session) bool { return s.Status == "waiting" || s.Status == "sto
 
 // An activityState is what a Live Activity shows, as RemoteActivityState: the counts, and the first few sessions that need you or work,
 // sealed with the phone's key. Only a few, since Apple caps a push at 4 KB and the relay a sealed part at 2000 characters.
+// What a waiting one asks goes too, unless names in wide characters leave no room for it.
 type activityState struct {
 	waiting, working int
 	sealed           string
@@ -124,18 +125,31 @@ func newActivityState(sessions []session, key []byte) activityState {
 	state := activityState{waiting: len(waiting), working: len(working)}
 	shown := []session{}
 	for _, s := range append(waiting, working...)[:min(4, len(waiting)+len(working))] {
-		if name := []rune(s.Name); len(name) > 60 {
-			s.Name = string(name[:60])
+		s.Name = shorten(s.Name, 60)
+		s.Branch, s.Agent = nil, ""
+		if s.Status == "waiting" {
+			s.Asking = shorten(s.Asking, askingLimit)
+		} else {
+			s.Asking = ""
 		}
-		s.Branch = nil
 		shown = append(shown, s)
 	}
-	if text, _ := json.Marshal(shown); key != nil {
-		if sealed := seal(key, text); sealed != nil {
-			state.sealed = base64.StdEncoding.EncodeToString(sealed)
+	state.sealed = sealSessions(key, shown)
+	if len(state.sealed) > 2000 {
+		for i := range shown {
+			shown[i].Asking = ""
 		}
+		state.sealed = sealSessions(key, shown)
 	}
 	return state
+}
+
+func sealSessions(key []byte, shown []session) string {
+	text, _ := json.Marshal(shown)
+	if sealed := seal(key, text); sealed != nil {
+		return base64.StdEncoding.EncodeToString(sealed)
+	}
+	return ""
 }
 
 func (s activityState) quiet() bool { return s.waiting == 0 && s.working == 0 }

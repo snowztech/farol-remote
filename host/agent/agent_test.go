@@ -265,3 +265,17 @@ func TestAStopCountsOnlyAtTheEndOfTheLogAndAfterTheStatus(t *testing.T) {
 		t.Fatalf("the stop shows as %v", shown)
 	}
 }
+
+func TestAQuestionToolShowsAsTheQuestionItAsks(t *testing.T) {
+	codex := codexTool(`{"questions":[{"title":"Which fruit?","options":["Apple","Pear"]}]}`, "request_user_input_async", "", "c1")
+	if codex == nil || codex.Tool != "Question" || codex.Text != "Which fruit?" || codex.Detail != "Which fruit?\n· Apple\n· Pear" {
+		t.Fatalf("got %+v", codex)
+	}
+	claude := claudeTool("AskUserQuestion", map[string]any{"questions": []any{map[string]any{"question": "Which approach?", "options": []any{map[string]any{"label": "Small"}}}}}, "", "a1")
+	if claude.Tool != "Question" || claude.Text != "Which approach?" {
+		t.Fatalf("got %+v", claude)
+	}
+	if bare := question([]any{map[string]any{"question": "Sure?"}}, "q"); bare == nil || bare.Detail != "" {
+		t.Fatalf("got %+v", bare)
+	}
+}

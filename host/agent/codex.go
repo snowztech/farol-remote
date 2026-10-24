@@ -108,6 +108,17 @@ var (
 // codexTool is what a Codex tool call did: an edit, from the patch it applied, or the commands it ran.
 // Its calls are a small script, `tools.exec_command({"cmd": "…"})`, or a patch between `*** Begin Patch` and `*** End Patch`.
 func codexTool(input, name, folder, id string) *Message {
+	// Codex asks with request_user_input, and while it works with request_user_input_async.
+	if strings.HasPrefix(name, "request_user_input") {
+		var arguments struct {
+			Questions []any `json:"questions"`
+		}
+		if json.Unmarshal([]byte(input), &arguments) == nil {
+			if asked := question(arguments.Questions, id); asked != nil {
+				return asked
+			}
+		}
+	}
 	if patch, ok := codexPatch(input); ok {
 		var files, diff []string
 		for _, line := range strings.Split(patch, "\n") {

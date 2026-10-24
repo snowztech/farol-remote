@@ -320,14 +320,27 @@ public struct RemoteActivityState: Codable, Hashable, Sendable {
         self.sealed = sealed
     }
 
+    /// How much of what a session asks goes along, enough for a line on the lock screen.
+    public static let askingLimit = 80
+    /// The longest sealed part the relay takes.
+    static let sealedLimit = 2000
+
     /// The counts, and the first few sessions that need you or work, sealed with the phone's key.
     /// Only a few, since Apple caps a push at 4 KB and the relay a sealed part at 2000 characters.
+    /// What a waiting one asks goes too, unless names in wide characters leave no room for it.
     public init(_ sessions: [RemoteSession], key: Data?) {
         let needsYou = sessions.filter { $0.status == .waiting || $0.status == .stopped }
         let working = sessions.filter { $0.status == .working }
-        let shown = (needsYou + working).prefix(4).map { RemoteSession(id: $0.id, name: String($0.name.prefix(60)), branch: nil, status: $0.status) }
-        self.init(waiting: needsYou.count, working: working.count,
-                  sealed: key.flatMap { NoticeBox.seal(Array(shown), key: $0) }?.base64EncodedString())
+        let shown = (needsYou + working).prefix(4).map {
+            RemoteSession(id: $0.id, name: String($0.name.prefix(60)), branch: nil, status: $0.status,
+                          asking: $0.status == .waiting ? $0.asking.map { String($0.prefix(Self.askingLimit)) } : nil)
+        }
+        func sealed(_ shown: [RemoteSession]) -> String? { key.flatMap { NoticeBox.seal(shown, key: $0) }?.base64EncodedString() }
+        var text = sealed(shown)
+        if let long = text, long.count > Self.sealedLimit {
+            text = sealed(shown.map { RemoteSession(id: $0.id, name: $0.name, branch: nil, status: $0.status) })
+        }
+        self.init(waiting: needsYou.count, working: working.count, sealed: text)
     }
 
     /// Nothing waits and nothing works, so there is nothing left to follow.
