@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/snowztech/farol-remote/host/agent"
 )
 
 // Runs against a real tmux, on a server of its own, and is skipped where there is none.
@@ -217,5 +219,17 @@ func TestASessionStoppedFromItsTerminalGoesBackToIdle(t *testing.T) {
 	}
 	if kept, _ := run("", "tmux", "show-options", "-w", "-v", "-t", "agent:", statusOption); strings.TrimSpace(kept) != "" {
 		t.Fatalf("tmux still says %q", kept)
+	}
+}
+
+func TestASessionSaysItsAgentAndWhatItAsks(t *testing.T) {
+	if agentOf("/home/me/.codex/sessions/2026/10/24/rollout.jsonl") != "codex" || agentOf("/home/me/.claude/projects/p/a.jsonl") != "claude" || agentOf("") != "" {
+		t.Fatal("named the agent wrong")
+	}
+	if got := asking(&agent.Request{Tool: "Bash", Title: "npm test"}); got != "Bash · npm test" {
+		t.Fatalf("asked %q", got)
+	}
+	if asking(&agent.Request{Title: "Which test?"}) != "Which test?" || asking(nil) != "" {
+		t.Fatal("asked a question wrong")
 	}
 }

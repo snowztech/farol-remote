@@ -44,11 +44,20 @@ func TestReadsEveryCommandAPhoneSends(t *testing.T) {
 	}
 }
 
+var shelfBranch = "main"
+
+// A waiting agent and a shell, as Swift's sample writes them, with the session and command ids it uses.
+var sampleSessions = []session{
+	{ID: "11111111-2222-3333-4444-555555555555", Name: "shelf", Branch: &shelfBranch, Status: "waiting", Agent: "codex", Asking: "Run touch probe.txt?"},
+	{ID: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE", Name: "zsh", Status: "idle"},
+}
+
 func TestWritesEveryEventAsAPhoneReadsIt(t *testing.T) {
 	session, command, attachment := "11111111-2222-3333-4444-555555555555", "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE", "99999999-8888-7777-6666-555555555555"
 	written := [][]byte{
 		optionsEvent([]choice{{"/home/me/shelf", "shelf"}}, []choice{{"claude", "Claude Code"}}),
 		openedEvent(command, session),
+		sessionsEvent(sampleSessions),
 		changesEvent(session, "Uncommitted", []change{
 			{Path: "b.go", OldPath: "a.go", Status: "renamed", Added: 1, Removed: 2},
 			{Path: "logo.png", Status: "added", Binary: true},

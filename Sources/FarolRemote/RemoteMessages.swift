@@ -28,6 +28,8 @@ public enum RemoteFeature: String, CaseIterable, Sendable {
     case terminal
     /// Opening and closing sessions, and the projects and agents to open them with.
     case sessions
+    /// Starting an agent on a task in a worktree of its own, from words the phone sends.
+    case tasks
     /// The changes in a session's repository, and their diffs.
     case changes
     /// Notifications and a Live Activity when an agent waits or is done.
@@ -36,7 +38,7 @@ public enum RemoteFeature: String, CaseIterable, Sendable {
     /// What a host can do, from what it said. One that said nothing is a Mac from before hosts said, which did legacy operations.
     /// A name this phone does not know is from a newer host, and is left out.
     public static func of(_ names: [String]?) -> Set<RemoteFeature> {
-        guard let names else { return Set(allCases).subtracting([.questionForms]) }
+        guard let names else { return Set(allCases).subtracting([.questionForms, .tasks]) }
         return Set(names.compactMap(RemoteFeature.init(rawValue:)))
     }
 }
@@ -68,12 +70,18 @@ public struct RemoteSession: Codable, Equatable, Identifiable, Sendable {
     public var name: String
     public var branch: String?
     public var status: RemoteStatus
+    /// The agent running there, like "claude" or "codex". Nil for a shell, and from a host that does not say.
+    public var agent: String?
+    /// What it waits on, in one line, so the list says which session needs what without opening each.
+    public var asking: String?
 
-    public init(id: UUID, name: String, branch: String?, status: RemoteStatus) {
+    public init(id: UUID, name: String, branch: String?, status: RemoteStatus, agent: String? = nil, asking: String? = nil) {
         self.id = id
         self.name = name
         self.branch = branch
         self.status = status
+        self.agent = agent
+        self.asking = asking
     }
 }
 
@@ -371,7 +379,8 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         case history(session: UUID)
         /// What a new task can be started in and with. Asked for when the phone opens its New task sheet.
         case options
-        /// Starts an agent on a task in a new worktree. `project` and `agent` are ids from `options`.
+        /// Starts an agent on `text` in a new worktree of a project, on a branch of its own. `project` and `agent` are ids from `options`.
+        /// Answered with `opened`, as `open` is. Only a host that says `tasks` takes it.
         case task(project: String, agent: String, text: String)
         /// Opens a new session in a project from `options`, like a new tab on the host. It runs the agent with that id from `options`,
         /// or is a plain shell when `agent` is nil. Ids only, so a phone picks from the host's lists and never sends a command to run.

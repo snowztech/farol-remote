@@ -126,9 +126,12 @@ func (t *tmux) sessions() []session {
 		id := sessionID(t.host, fields[0], fields[1])
 		targets[id] = fields[0]
 		agents[id] = agentState{folder: fields[2], status: status, log: fields[4], started: fields[5] != "", request: readRequest(request)}
-		one := session{ID: id, Name: fields[8], Status: "idle"}
+		one := session{ID: id, Name: fields[8], Status: "idle", Agent: agentOf(fields[4])}
 		if status != "" {
 			one.Status = status
+		}
+		if status == "waiting" {
+			one.Asking = asking(agents[id].request)
 		}
 		if name := t.branch(fields[2]); name != "" {
 			one.Branch = &name
@@ -137,6 +140,28 @@ func (t *tmux) sessions() []session {
 	}
 	t.targets, t.agents = targets, agents
 	return list
+}
+
+// agentOf is the agent whose log a session's hooks named, by the folder agents keep their logs in.
+func agentOf(log string) string {
+	switch {
+	case strings.Contains(log, "/.codex"):
+		return "codex"
+	case strings.Contains(log, "/.claude"):
+		return "claude"
+	}
+	return ""
+}
+
+// asking is what a waiting agent's hook said it asks, in one line: the tool and what it would do, or the question.
+func asking(request *agent.Request) string {
+	switch {
+	case request == nil:
+		return ""
+	case request.Tool != "":
+		return request.Tool + " · " + request.Title
+	}
+	return request.Title
 }
 
 // sessionID is the id a phone knows a session by: a tmux window's. tmux counts windows from zero after a restart,
