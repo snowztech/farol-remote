@@ -97,19 +97,33 @@ type command struct {
 			Session string `json:"session"`
 			Key     string `json:"key"`
 		} `json:"key"`
+		// With vt, the rows above the screen as VT sequences.
 		History *struct {
 			Session string `json:"session"`
+			Vt      bool   `json:"vt"`
 		} `json:"history"`
 		Answer *struct {
 			Session string `json:"session"`
 			Request string `json:"request"`
 			Choice  int    `json:"choice"`
 		} `json:"answer"`
-		// The phone shows the session's terminal, or stopped showing it.
+		// The phone shows the session's terminal, or stopped showing it. With vt, it draws the terminal itself from VT sequences.
 		Terminal *struct {
 			Session string `json:"session"`
 			Open    bool   `json:"open"`
+			Vt      bool   `json:"vt"`
 		} `json:"terminal"`
+		// Bytes as a keyboard sends them, already encoded for the program.
+		Input *struct {
+			Session string `json:"session"`
+			Data    []byte `json:"data"`
+		} `json:"input"`
+		// The size of the phone's terminal, which the pane takes while the phone shows it.
+		Fit *struct {
+			Session string `json:"session"`
+			Cols    int    `json:"cols"`
+			Rows    int    `json:"rows"`
+		} `json:"fit"`
 		// Control with a letter, like Control-C.
 		Control *struct {
 			Session string `json:"session"`
@@ -195,7 +209,7 @@ func event(name string, body any) []byte {
 }
 
 // What this host can do beyond screens and typing, by the names RemoteFeature gives them.
-var features = []string{"conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions", "changes"}
+var features = []string{"conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions", "changes", "vt", "fit"}
 
 // helloEvent says the version this host speaks, what to call it, and what it can do.
 func helloEvent(name string) []byte {
@@ -215,6 +229,15 @@ func screenEvent(session, text string) []byte {
 
 func historyEvent(session, text string) []byte {
 	return event("history", typed{session, text})
+}
+
+// vtEvent is the screen of the terminal a phone draws itself, as VT sequences, and its size.
+func vtEvent(session string, screen vtScreen) []byte {
+	return event("vt", map[string]any{"session": session, "cols": screen.cols, "rows": screen.rows, "data": []byte(screen.data)})
+}
+
+func vtHistoryEvent(session, text string) []byte {
+	return event("vtHistory", map[string]any{"session": session, "data": []byte(text)})
 }
 
 // Where messages go in the conversation a phone has: in place of all of it, before or after one message, or in place of the ones with their ids.

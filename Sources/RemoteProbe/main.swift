@@ -73,6 +73,8 @@ final class Probe {
             }
         case .event(.screen(_, let text)): print("# screen\n\(text)\n# end")
         case .event(.history(_, let text)): print("# history\n\(text)\n# end")
+        case .event(.vt(_, let cols, let rows, let data)): print("# vt \(cols)x\(rows), \(data.count) bytes")
+        case .event(.vtHistory(_, let data)): print("# vt history, \(data.count) bytes")
         case .event(.options(let projects, let agents, _)):
             self.projects = projects
             self.agents = agents

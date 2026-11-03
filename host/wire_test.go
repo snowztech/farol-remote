@@ -73,6 +73,8 @@ func TestWritesEveryEventAsAPhoneReadsIt(t *testing.T) {
 		requestEvent(session, nil),
 		attachedEvent(command, attachment, "/home/me/.cache/Farol/Attachments/a.png"),
 		commandsEvent(session, []agent.Command{{Name: "clear", Detail: "Start over"}, {Name: "deploy", Menu: true, Mention: true}}),
+		vtEvent(session, vtScreen{80, 24, "\x1b[H\x1b[32m$\x1b[0m ls"}),
+		vtHistoryEvent(session, "earlier\r\nlines"),
 	}
 	events := wire(t).Events
 	if len(events) != len(written) {

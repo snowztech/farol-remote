@@ -34,11 +34,15 @@ public enum RemoteFeature: String, CaseIterable, Sendable {
     case changes
     /// Notifications and a Live Activity when an agent waits or is done.
     case notifications
+    /// The terminal as VT sequences, for a phone that draws it as the host does, and bytes typed straight into it.
+    case vt
+    /// The pane takes the size of the phone's terminal while the phone shows it, so programs draw for the phone.
+    case fit
 
     /// What a host can do, from what it said. One that said nothing is a Mac from before hosts said, which did legacy operations.
     /// A name this phone does not know is from a newer host, and is left out.
     public static func of(_ names: [String]?) -> Set<RemoteFeature> {
-        guard let names else { return Set(allCases).subtracting([.questionForms, .tasks]) }
+        guard let names else { return Set(allCases).subtracting([.questionForms, .tasks, .vt, .fit]) }
         return Set(names.compactMap(RemoteFeature.init(rawValue:)))
     }
 }
@@ -389,7 +393,8 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         /// A Mac that does not know it refuses it, and the phone goes on without updates.
         case activity(token: Data, sandbox: Bool)
         /// What scrolled off the top of a session's screen. Asked for once, when someone wants to read back.
-        case history(session: UUID)
+        /// With `vt`, a host that says `vt` answers with `vtHistory` instead.
+        case history(session: UUID, vt: Bool? = nil)
         /// What a new task can be started in and with. Asked for when the phone opens its New task sheet.
         case options
         /// Starts an agent on `text` in a new worktree of a project, on a branch of its own. `project` and `agent` are ids from `options`.
@@ -415,7 +420,13 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         case respondAsk(session: UUID, ask: UUID, decision: RemoteAsk.Decision)
         /// The phone shows the session's terminal, or stopped showing it. While it does, the host sends its screen often.
         /// A phone that never says gets the screen as before, which is how a host tells an older phone apart.
-        case terminal(session: UUID, open: Bool)
+        /// With `vt`, a host that says `vt` also sends the screen as `vt`, for a phone that draws the terminal itself.
+        case terminal(session: UUID, open: Bool, vt: Bool? = nil)
+        /// Bytes as a keyboard sends them, already encoded for the program, like `ESC [ A` for Up. Only a host that says `vt` takes it.
+        case input(session: UUID, data: Data)
+        /// The size in cells of the phone's terminal at a size it reads well. A host that says `fit` gives the pane that size while
+        /// the phone shows it and nobody uses the host, and gives it back once the phone leaves or someone does. Sent again when it changes.
+        case fit(session: UUID, cols: Int, rows: Int)
         /// A letter with Control held, like Control-D to end a shell or Control-R to search its history. `key` is one of a to z.
         case control(session: UUID, key: String)
         /// What the agent in a session takes after a slash. Asked once, when a reply starts with one.
@@ -444,6 +455,11 @@ public enum RemoteEvent: Codable, Equatable, Sendable {
     case screen(session: UUID, text: String)
     /// The lines above the screen, oldest first, as far back as fits in one message.
     case history(session: UUID, text: String)
+    /// The screen of the terminal a phone shows, as VT sequences: its colors and modes, the rows of the screen from the top left,
+    /// then where the cursor is. `cols` and `rows` are its size. Sent only while the phone shows it with `vt`, and only when it changes.
+    case vt(session: UUID, cols: Int, rows: Int, data: Data)
+    /// Answers `history` with `vt`: the rows above the screen as VT sequences with their colors, oldest first, as far back as fits.
+    case vtHistory(session: UUID, data: Data)
     case options(projects: [RemoteChoice], agents: [RemoteChoice], agent: String?)
     case done(command: UUID)
     /// The session an `open` made, so the phone can go straight to it. It answers that command, as `done` does.

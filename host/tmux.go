@@ -22,6 +22,14 @@ type terminal interface {
 	screen(id string) (string, bool)
 	// history is what scrolled off the top, oldest first.
 	history(id string) (string, bool)
+	// vtScreen is the screen as VT sequences, for a phone that draws the terminal itself.
+	vtScreen(id string) (vtScreen, bool)
+	// vtHistory is what scrolled off the top as VT sequences, oldest first.
+	vtHistory(id string) (string, bool)
+	// input writes bytes as a keyboard sends them.
+	input(id string, data []byte) bool
+	// fit gives the session's pane a size in cells, or its own back with zero.
+	fit(id string, cols, rows int) bool
 	// agentIn is what the hooks of the agent in the session said of it. False when the session is gone.
 	agentIn(id string) (agentState, bool)
 	// answered forgets what the agent asked, once an answer is on its way, so a second tap is refused rather than typed into what it asks next.
@@ -208,6 +216,100 @@ func (t *tmux) capture(id string, args ...string) (string, bool) {
 func (t *tmux) screen(id string) (string, bool) { return t.capture(id) }
 
 func (t *tmux) history(id string) (string, bool) { return t.capture(id, "-S", "-", "-E", "-1") }
+
+// A pane as a phone redraws it: its size, and VT sequences that set it up from a blank terminal.
+type vtScreen struct {
+	cols, rows int
+	data       string
+}
+
+// What tmux knows of a pane that the phone needs to draw it and type into it the way the program asked.
+const paneModes = "#{pane_width} #{pane_height} #{cursor_x} #{cursor_y} #{cursor_flag} #{alternate_on} #{keypad_cursor_flag} " +
+	"#{mouse_standard_flag} #{mouse_button_flag} #{mouse_all_flag} #{mouse_sgr_flag}"
+
+func (t *tmux) vtScreen(id string) (vtScreen, bool) {
+	target, ok := t.target(id)
+	if !ok {
+		return vtScreen{}, false
+	}
+	modes, err := run("", "tmux", "display-message", "-p", "-t", target, paneModes)
+	if err != nil {
+		return vtScreen{}, false
+	}
+	// -J sends a wrapped line as one, so a terminal of another width wraps it again where it should.
+	rows, err := run("", "tmux", "capture-pane", "-p", "-e", "-J", "-t", target)
+	if err != nil {
+		return vtScreen{}, false
+	}
+	return paneVT(modes, rows)
+}
+
+// paneVT puts a pane's modes, its rows from `capture-pane -e`, and its cursor together as one screen.
+func paneVT(modes, rows string) (vtScreen, bool) {
+	var n [11]int
+	fields := strings.Fields(modes)
+	if len(fields) != len(n) {
+		return vtScreen{}, false
+	}
+	for i, field := range fields {
+		n[i], _ = strconv.Atoi(field)
+	}
+	var b strings.Builder
+	for i, mode := range []string{"?1049", "?1", "?1000", "?1002", "?1003", "?1006"} {
+		if n[5+i] == 1 {
+			b.WriteString("\x1b[" + mode + "h")
+		}
+	}
+	b.WriteString("\x1b[H")
+	b.WriteString(vtLines(rows))
+	fmt.Fprintf(&b, "\x1b[%d;%dH", n[3]+1, n[2]+1)
+	if n[4] == 0 {
+		b.WriteString("\x1b[?25l")
+	}
+	return vtScreen{cols: n[0], rows: n[1], data: b.String()}, true
+}
+
+// vtLines joins captured rows as a terminal moves between them, each ending with its colors reset, since tmux starts the next from none.
+func vtLines(rows string) string {
+	return strings.ReplaceAll(strings.TrimRight(rows, "\n"), "\n", "\x1b[0m\r\n") + "\x1b[0m"
+}
+
+func (t *tmux) vtHistory(id string) (string, bool) {
+	text, ok := t.capture(id, "-e", "-J", "-S", "-", "-E", "-1")
+	if !ok || text == "" {
+		return "", ok
+	}
+	return vtLines(text), true
+}
+
+func (t *tmux) input(id string, data []byte) bool {
+	target, ok := t.target(id)
+	if !ok || len(data) == 0 {
+		return ok
+	}
+	// -H takes each byte in hex, so nothing the phone sends is read as a key name.
+	args := []string{"send-keys", "-t", target, "-H"}
+	for _, c := range data {
+		args = append(args, fmt.Sprintf("%02x", c))
+	}
+	_, err := run("", "tmux", args...)
+	return err == nil
+}
+
+func (t *tmux) fit(id string, cols, rows int) bool {
+	target, ok := t.target(id)
+	if !ok {
+		return false
+	}
+	var err error
+	if cols > 0 && rows > 0 {
+		_, err = run("", "tmux", "resize-window", "-t", target, "-x", strconv.Itoa(cols), "-y", strconv.Itoa(rows))
+	} else {
+		// resize-window leaves the window at a size of its own. As large as its clients again, then back to following them.
+		_, err = run("", "tmux", "resize-window", "-A", "-t", target, ";", "set-option", "-w", "-u", "-t", target, "window-size")
+	}
+	return err == nil
+}
 
 func (t *tmux) agentIn(id string) (agentState, bool) {
 	// Looked up as a target is, which reads the sessions again for one made since the last look.

@@ -20,7 +20,11 @@
     "{\"action\":{\"control\":{\"key\":\"d\",\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
     "{\"action\":{\"commands\":{\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
     "{\"action\":{\"attach\":{\"attachment\":\"99999999-8888-7777-6666-555555555555\",\"data\":\"\\/w==\",\"part\":0,\"parts\":1,\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
-    "{\"action\":{\"forget\":{}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}"
+    "{\"action\":{\"forget\":{}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"terminal\":{\"open\":true,\"session\":\"11111111-2222-3333-4444-555555555555\",\"vt\":true}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"history\":{\"session\":\"11111111-2222-3333-4444-555555555555\",\"vt\":true}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"input\":{\"data\":\"G1tB\",\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"fit\":{\"cols\":48,\"rows\":22,\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}"
   ],
   "events" : [
     "{\"options\":{\"agent\":\"claude\",\"agents\":[{\"id\":\"claude\",\"name\":\"Claude Code\"}],\"projects\":[{\"id\":\"\\/home\\/me\\/shelf\",\"name\":\"shelf\"}]}}",
@@ -34,7 +38,9 @@
     "{\"request\":{\"request\":{\"choices\":[{\"detail\":\"the order test\",\"label\":\"store\"},{\"label\":\"all\"}],\"id\":\"toolu_01\",\"title\":\"Which test?\"},\"session\":\"11111111-2222-3333-4444-555555555555\"}}",
     "{\"request\":{\"session\":\"11111111-2222-3333-4444-555555555555\"}}",
     "{\"attached\":{\"attachment\":\"99999999-8888-7777-6666-555555555555\",\"command\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\",\"path\":\"\\/home\\/me\\/.cache\\/Farol\\/Attachments\\/a.png\"}}",
-    "{\"commands\":{\"commands\":[{\"detail\":\"Start over\",\"mention\":false,\"menu\":false,\"name\":\"clear\"},{\"mention\":true,\"menu\":true,\"name\":\"deploy\"}],\"session\":\"11111111-2222-3333-4444-555555555555\"}}"
+    "{\"commands\":{\"commands\":[{\"detail\":\"Start over\",\"mention\":false,\"menu\":false,\"name\":\"clear\"},{\"mention\":true,\"menu\":true,\"name\":\"deploy\"}],\"session\":\"11111111-2222-3333-4444-555555555555\"}}",
+    "{\"vt\":{\"cols\":80,\"data\":\"G1tIG1szMm0kG1swbSBscw==\",\"rows\":24,\"session\":\"11111111-2222-3333-4444-555555555555\"}}",
+    "{\"vtHistory\":{\"data\":\"ZWFybGllcg0KbGluZXM=\",\"session\":\"11111111-2222-3333-4444-555555555555\"}}"
   ],
   "keys" : [
     "enter",

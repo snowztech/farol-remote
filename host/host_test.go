@@ -21,6 +21,8 @@ type fakeTerminal struct {
 	agent agentState
 	// The sessions opened, as "folder name command", and closed.
 	opened, closed []string
+	// The sizes the pane was given, as "48x22", and "0x0" for its own back.
+	fits []string
 }
 
 const fakeSession = "11111111-2222-3333-4444-555555555555"
@@ -38,6 +40,23 @@ func (f *fakeTerminal) screen(id string) (string, bool) {
 }
 
 func (f *fakeTerminal) history(id string) (string, bool) { return "earlier", id == fakeSession }
+
+func (f *fakeTerminal) vtScreen(id string) (vtScreen, bool) {
+	return vtScreen{cols: 80, rows: 24, data: "\x1b[Htyped: " + strings.Join(f.typed, ",")}, id == fakeSession
+}
+
+func (f *fakeTerminal) vtHistory(id string) (string, bool) {
+	return "\x1b[32mearlier\x1b[0m", id == fakeSession
+}
+
+func (f *fakeTerminal) input(id string, data []byte) bool {
+	return f.paste(id, fmt.Sprintf("%q", data))
+}
+
+func (f *fakeTerminal) fit(id string, cols, rows int) bool {
+	f.fits = append(f.fits, fmt.Sprintf("%dx%d", cols, rows))
+	return id == fakeSession
+}
 
 func (f *fakeTerminal) agentIn(id string) (agentState, bool) {
 	if id != fakeSession {
@@ -534,6 +553,66 @@ func TestAPhoneReadingTheConversationGetsTheScreenOnlyWithTheTerminalOpen(t *tes
 	b.host.due(start)
 	if b.host.due(start.Add(100*time.Millisecond)) || !b.host.due(start.Add(130*time.Millisecond)) {
 		t.Fatal("not paced for a terminal")
+	}
+}
+
+func TestAPhoneThatDrawsTheTerminalGetsItAsVT(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.ask("w", watch(fakeSession))
+	b.ask("o", fmt.Sprintf(`{"terminal":{"session":%q,"open":true,"vt":true}}`, fakeSession))
+	// What was typed shows at once, as the new screen.
+	same(t, b.ask("i", fmt.Sprintf(`{"input":{"session":%q,"data":"G1tB"}}`, fakeSession)), doneEvent("i"),
+		vtEvent(fakeSession, vtScreen{80, 24, "\x1b[Htyped: \"\\x1b[A\""}), screenEvent(fakeSession, `typed: "\x1b[A"`))
+	same(t, b.ask("h", fmt.Sprintf(`{"history":{"session":%q,"vt":true}}`, fakeSession)), vtHistoryEvent(fakeSession, "\x1b[32mearlier\x1b[0m"))
+	// Closed, it goes back to the plain screen alone.
+	b.ask("c", fmt.Sprintf(`{"terminal":{"session":%q,"open":false}}`, fakeSession))
+	b.ask("s", send(fakeSession, "x"))
+	for _, event := range b.tick() {
+		if strings.HasPrefix(event, `{"vt"`) {
+			t.Fatal("sent VT to a phone that closed its terminal")
+		}
+	}
+}
+
+func TestThePaneTakesThePhonesSizeOnlyWhileItShowsTheTerminal(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.ask("w", watch(fakeSession))
+	b.ask("f", fmt.Sprintf(`{"fit":{"session":%q,"cols":48,"rows":22}}`, fakeSession))
+	if len(b.terminal.fits) != 0 {
+		t.Fatalf("resized a pane the phone does not show: %v", b.terminal.fits)
+	}
+	b.ask("o", fmt.Sprintf(`{"terminal":{"session":%q,"open":true,"vt":true}}`, fakeSession))
+	b.tick()
+	// The keyboard came up, so fewer rows fit.
+	b.ask("k", fmt.Sprintf(`{"fit":{"session":%q,"cols":48,"rows":14}}`, fakeSession))
+	b.ask("c", fmt.Sprintf(`{"terminal":{"session":%q,"open":false}}`, fakeSession))
+	b.tick()
+	if got := strings.Join(b.terminal.fits, ","); got != "48x22,48x14,0x0" {
+		t.Fatalf("fits %s", got)
+	}
+	// A phone that goes without closing gives it back too.
+	b.ask("o2", fmt.Sprintf(`{"terminal":{"session":%q,"open":true,"vt":true}}`, fakeSession))
+	b.tick()
+	b.host.receive([]byte{frameLeft, 0, 0, 0, 1})
+	b.host.tick()
+	if got := strings.Join(b.terminal.fits, ","); got != "48x22,48x14,0x0,48x14,0x0" {
+		t.Fatalf("fits %s", got)
+	}
+}
+
+func TestAPaneBecomesVTAPhoneCanRedraw(t *testing.T) {
+	screen, ok := paneVT("100 2 3 1 1 1 1 0 1 0 1", "\x1b[32m$\x1b[39m ls\nfoo\n")
+	want := "\x1b[?1049h\x1b[?1h\x1b[?1002h\x1b[?1006h\x1b[H\x1b[32m$\x1b[39m ls\x1b[0m\r\nfoo\x1b[0m\x1b[2;4H"
+	if !ok || screen.cols != 100 || screen.rows != 2 || screen.data != want {
+		t.Fatalf("%v %q", ok, screen.data)
+	}
+	if screen, _ := paneVT("80 24 0 0 0 0 0 0 0 0 0", ""); !strings.HasSuffix(screen.data, "\x1b[?25l") {
+		t.Fatal("a hidden cursor shows")
+	}
+	if _, ok := paneVT("80 24", ""); ok {
+		t.Fatal("read modes tmux did not give")
 	}
 }
 

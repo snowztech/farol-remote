@@ -39,6 +39,14 @@ type host struct {
 	statuses map[string]string
 	// Phones sent a Live Activity start and not yet the started activity's address. Another start would only stack a second one.
 	starting map[string]bool
+	// The panes sized for a phone, and the size each was given.
+	fitted map[string]paneSize
+}
+
+// The size in cells a phone asked a pane to take.
+type paneSize struct {
+	session    string
+	cols, rows int
 }
 
 type paste struct {
@@ -63,6 +71,11 @@ type phone struct {
 	saysTerminal bool
 	// The session whose terminal it shows.
 	terminal string
+	// It draws that terminal itself, from VT sequences, and was last sent this of it.
+	vt       bool
+	vtScreen *string
+	// The size its terminal fits in, which the pane takes while it shows it.
+	fit *paneSize
 	// What it was last told the watched session waits on. Nil until told, so it is always told once, even that it waits on nothing.
 	request []byte
 	// The session it was told is an empty conversation, an agent started there with no log yet, so it is told once.
@@ -194,7 +207,8 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 	case a.Answer != nil:
 		h.answer(id, p, c.ID, a.Answer.Session, a.Answer.Request, a.Answer.Choice)
 	case a.Terminal != nil:
-		p.saysTerminal, p.screen = true, nil
+		p.saysTerminal, p.screen, p.vtScreen = true, nil, nil
+		p.vt = a.Terminal.Open && a.Terminal.Vt
 		if a.Terminal.Open {
 			p.terminal = a.Terminal.Session
 		} else if p.terminal == a.Terminal.Session {
@@ -219,6 +233,10 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 		}
 	case a.Activity != nil:
 		h.activityStarted(p.device.Key, a.Activity.Token, a.Activity.Sandbox, h.terminal.sessions())
+	case a.History != nil && a.History.Vt:
+		if text, ok := h.terminal.vtHistory(a.History.Session); ok {
+			h.tell(id, p, vtHistoryEvent(a.History.Session, lastLines(text, maxVTHistory)))
+		}
 	case a.History != nil:
 		if text, ok := h.terminal.history(a.History.Session); ok {
 			h.tell(id, p, historyEvent(a.History.Session, lastLines(text, maxHistory)))
@@ -230,6 +248,11 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 		})
 	case a.Type != nil:
 		h.act(id, p, c.ID, func() bool { return h.terminal.keys(a.Type.Session, a.Type.Text) })
+	case a.Fit != nil:
+		p.fit = &paneSize{a.Fit.Session, a.Fit.Cols, a.Fit.Rows}
+		h.refit()
+	case a.Input != nil:
+		h.act(id, p, c.ID, func() bool { return h.terminal.input(a.Input.Session, a.Input.Data) })
 	case a.Key != nil:
 		if _, known := tmuxKeys[a.Key.Key]; !known {
 			h.tell(id, p, refusedEvent(c.ID, "This machine does not know that key. Update farol-host on it."))
@@ -336,6 +359,7 @@ func (h *host) due(now time.Time) bool {
 func (h *host) tick() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.refit()
 	if len(h.phones) == 0 {
 		h.notice(h.terminal.sessions())
 		return
@@ -348,6 +372,28 @@ func (h *host) tick() {
 		}
 	}
 	h.refresh()
+}
+
+// refit gives each pane a phone shows the phone's size, and its own back once no phone shows it.
+// A server has nobody at it, so unlike the Mac it does not wait for one to look away.
+func (h *host) refit() {
+	wanted := map[string]paneSize{}
+	for _, p := range h.phones {
+		if p.fit != nil && p.fit.cols > 0 && p.fit.rows > 0 && p.terminal == p.fit.session {
+			wanted[p.fit.session] = *p.fit
+		}
+	}
+	for id := range h.fitted {
+		if _, ok := wanted[id]; !ok {
+			h.terminal.fit(id, 0, 0)
+		}
+	}
+	for id, size := range wanted {
+		if h.fitted[id] != size {
+			h.terminal.fit(id, size.cols, size.rows)
+		}
+	}
+	h.fitted = wanted
 }
 
 // refresh sends each phone what changed: the list, and the conversation and screen of the session it has open.
@@ -375,6 +421,12 @@ func (h *host) refresh() {
 		// A phone reading the conversation needs the screen only for a question the hooks did not describe.
 		if asked, _ := h.terminal.agentIn(p.watching); p.saysTerminal && p.terminal != p.watching && asked.status != "waiting" {
 			continue
+		}
+		if p.vt && p.terminal == p.watching {
+			if screen, ok := h.terminal.vtScreen(p.watching); ok && (p.vtScreen == nil || *p.vtScreen != screen.data) {
+				p.vtScreen = &screen.data
+				h.tell(id, p, vtEvent(p.watching, screen))
+			}
 		}
 		text, ok := h.terminal.screen(p.watching)
 		if !ok || (p.screen != nil && *p.screen == text) {
@@ -411,6 +463,9 @@ func (h *host) refuse(id uint32, why string) {
 
 // The relay passes messages up to 256 KB. Sealed and written as text, this much history stays under that.
 const maxHistory = 120 << 10
+
+// VT history goes as base64 inside the sealed message, which is base64 again, so less of it fits.
+const maxVTHistory = 90 << 10
 
 // lastLines keeps the end of a text, from the start of a line, when the whole of it is too much to send.
 func lastLines(text string, limit int) string {
