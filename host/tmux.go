@@ -236,7 +236,8 @@ func (t *tmux) vtScreen(id string) (vtScreen, bool) {
 	if err != nil {
 		return vtScreen{}, false
 	}
-	rows, err := run("", "tmux", "capture-pane", "-p", "-e", "-t", target)
+	// -J sends a wrapped line as one, so a terminal of another width wraps it again where it should.
+	rows, err := run("", "tmux", "capture-pane", "-p", "-e", "-J", "-t", target)
 	if err != nil {
 		return vtScreen{}, false
 	}
@@ -274,7 +275,7 @@ func vtLines(rows string) string {
 }
 
 func (t *tmux) vtHistory(id string) (string, bool) {
-	text, ok := t.capture(id, "-e", "-S", "-", "-E", "-1")
+	text, ok := t.capture(id, "-e", "-J", "-S", "-", "-E", "-1")
 	if !ok || text == "" {
 		return "", ok
 	}
