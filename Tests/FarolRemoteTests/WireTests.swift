@@ -24,6 +24,7 @@ private struct Wire: Codable {
         .conversation(session: session, before: "a1.0"), .answer(session: session, request: "toolu_01", choice: 2),
         .terminal(session: session, open: true), .control(session: session, key: "d"), .commands(session: session),
         .attach(session: session, attachment: attachment, part: 0, parts: 1, data: Data([0xFF])), .forget,
+        .terminal(session: session, open: true, vt: true), .history(session: session, vt: true), .input(session: session, data: Data([0x1B, 0x5B, 0x41])),
     ]
     let events: [RemoteEvent] = [
         .options(projects: [RemoteChoice(id: "/home/me/shelf", name: "shelf")], agents: [RemoteChoice(id: "claude", name: "Claude Code")], agent: "claude"),
@@ -47,6 +48,8 @@ private struct Wire: Codable {
         .request(session: session, request: nil),
         .attached(command: command, attachment: attachment, path: "/home/me/.cache/Farol/Attachments/a.png"),
         .commands(session: session, commands: [RemoteAgentCommand(name: "clear", detail: "Start over"), RemoteAgentCommand(name: "deploy", menu: true, mention: true)]),
+        .vt(session: session, cols: 80, rows: 24, data: Data("\u{1B}[H\u{1B}[32m$\u{1B}[0m ls".utf8)),
+        .vtHistory(session: session, data: Data("earlier\r\nlines".utf8)),
     ]
     let line = JSONEncoder()
     line.outputFormatting = [.sortedKeys]
