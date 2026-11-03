@@ -39,6 +39,18 @@ func (f *fakeTerminal) screen(id string) (string, bool) {
 
 func (f *fakeTerminal) history(id string) (string, bool) { return "earlier", id == fakeSession }
 
+func (f *fakeTerminal) vtScreen(id string) (vtScreen, bool) {
+	return vtScreen{cols: 80, rows: 24, data: "\x1b[Htyped: " + strings.Join(f.typed, ",")}, id == fakeSession
+}
+
+func (f *fakeTerminal) vtHistory(id string) (string, bool) {
+	return "\x1b[32mearlier\x1b[0m", id == fakeSession
+}
+
+func (f *fakeTerminal) input(id string, data []byte) bool {
+	return f.paste(id, fmt.Sprintf("%q", data))
+}
+
 func (f *fakeTerminal) agentIn(id string) (agentState, bool) {
 	if id != fakeSession {
 		return agentState{}, false
@@ -534,6 +546,39 @@ func TestAPhoneReadingTheConversationGetsTheScreenOnlyWithTheTerminalOpen(t *tes
 	b.host.due(start)
 	if b.host.due(start.Add(100*time.Millisecond)) || !b.host.due(start.Add(130*time.Millisecond)) {
 		t.Fatal("not paced for a terminal")
+	}
+}
+
+func TestAPhoneThatDrawsTheTerminalGetsItAsVT(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.ask("w", watch(fakeSession))
+	b.ask("o", fmt.Sprintf(`{"terminal":{"session":%q,"open":true,"vt":true}}`, fakeSession))
+	// What was typed shows at once, as the new screen.
+	same(t, b.ask("i", fmt.Sprintf(`{"input":{"session":%q,"data":"G1tB"}}`, fakeSession)), doneEvent("i"),
+		vtEvent(fakeSession, vtScreen{80, 24, "\x1b[Htyped: \"\\x1b[A\""}), screenEvent(fakeSession, `typed: "\x1b[A"`))
+	same(t, b.ask("h", fmt.Sprintf(`{"history":{"session":%q,"vt":true}}`, fakeSession)), vtHistoryEvent(fakeSession, "\x1b[32mearlier\x1b[0m"))
+	// Closed, it goes back to the plain screen alone.
+	b.ask("c", fmt.Sprintf(`{"terminal":{"session":%q,"open":false}}`, fakeSession))
+	b.ask("s", send(fakeSession, "x"))
+	for _, event := range b.tick() {
+		if strings.HasPrefix(event, `{"vt"`) {
+			t.Fatal("sent VT to a phone that closed its terminal")
+		}
+	}
+}
+
+func TestAPaneBecomesVTAPhoneCanRedraw(t *testing.T) {
+	screen, ok := paneVT("100 2 3 1 1 1 1 0 1 0 1", "\x1b[32m$\x1b[39m ls\nfoo\n")
+	want := "\x1b[?1049h\x1b[?1h\x1b[?1002h\x1b[?1006h\x1b[H\x1b[32m$\x1b[39m ls\x1b[0m\r\nfoo\x1b[0m\x1b[2;4H"
+	if !ok || screen.cols != 100 || screen.rows != 2 || screen.data != want {
+		t.Fatalf("%v %q", ok, screen.data)
+	}
+	if screen, _ := paneVT("80 24 0 0 0 0 0 0 0 0 0", ""); !strings.HasSuffix(screen.data, "\x1b[?25l") {
+		t.Fatal("a hidden cursor shows")
+	}
+	if _, ok := paneVT("80 24", ""); ok {
+		t.Fatal("read modes tmux did not give")
 	}
 }
 

@@ -63,6 +63,9 @@ type phone struct {
 	saysTerminal bool
 	// The session whose terminal it shows.
 	terminal string
+	// It draws that terminal itself, from VT sequences, and was last sent this of it.
+	vt       bool
+	vtScreen *string
 	// What it was last told the watched session waits on. Nil until told, so it is always told once, even that it waits on nothing.
 	request []byte
 	// The session it was told is an empty conversation, an agent started there with no log yet, so it is told once.
@@ -194,7 +197,8 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 	case a.Answer != nil:
 		h.answer(id, p, c.ID, a.Answer.Session, a.Answer.Request, a.Answer.Choice)
 	case a.Terminal != nil:
-		p.saysTerminal, p.screen = true, nil
+		p.saysTerminal, p.screen, p.vtScreen = true, nil, nil
+		p.vt = a.Terminal.Open && a.Terminal.Vt
 		if a.Terminal.Open {
 			p.terminal = a.Terminal.Session
 		} else if p.terminal == a.Terminal.Session {
@@ -219,6 +223,10 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 		}
 	case a.Activity != nil:
 		h.activityStarted(p.device.Key, a.Activity.Token, a.Activity.Sandbox, h.terminal.sessions())
+	case a.History != nil && a.History.Vt:
+		if text, ok := h.terminal.vtHistory(a.History.Session); ok {
+			h.tell(id, p, vtHistoryEvent(a.History.Session, lastLines(text, maxVTHistory)))
+		}
 	case a.History != nil:
 		if text, ok := h.terminal.history(a.History.Session); ok {
 			h.tell(id, p, historyEvent(a.History.Session, lastLines(text, maxHistory)))
@@ -230,6 +238,8 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 		})
 	case a.Type != nil:
 		h.act(id, p, c.ID, func() bool { return h.terminal.keys(a.Type.Session, a.Type.Text) })
+	case a.Input != nil:
+		h.act(id, p, c.ID, func() bool { return h.terminal.input(a.Input.Session, a.Input.Data) })
 	case a.Key != nil:
 		if _, known := tmuxKeys[a.Key.Key]; !known {
 			h.tell(id, p, refusedEvent(c.ID, "This machine does not know that key. Update farol-host on it."))
@@ -376,6 +386,12 @@ func (h *host) refresh() {
 		if asked, _ := h.terminal.agentIn(p.watching); p.saysTerminal && p.terminal != p.watching && asked.status != "waiting" {
 			continue
 		}
+		if p.vt && p.terminal == p.watching {
+			if screen, ok := h.terminal.vtScreen(p.watching); ok && (p.vtScreen == nil || *p.vtScreen != screen.data) {
+				p.vtScreen = &screen.data
+				h.tell(id, p, vtEvent(p.watching, screen))
+			}
+		}
 		text, ok := h.terminal.screen(p.watching)
 		if !ok || (p.screen != nil && *p.screen == text) {
 			continue
@@ -411,6 +427,9 @@ func (h *host) refuse(id uint32, why string) {
 
 // The relay passes messages up to 256 KB. Sealed and written as text, this much history stays under that.
 const maxHistory = 120 << 10
+
+// VT history goes as base64 inside the sealed message, which is base64 again, so less of it fits.
+const maxVTHistory = 90 << 10
 
 // lastLines keeps the end of a text, from the start of a line, when the whole of it is too much to send.
 func lastLines(text string, limit int) string {
