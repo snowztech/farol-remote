@@ -28,6 +28,8 @@ type terminal interface {
 	vtHistory(id string) (string, bool)
 	// input writes bytes as a keyboard sends them.
 	input(id string, data []byte) bool
+	// fit gives the session's pane a size in cells, or its own back with zero.
+	fit(id string, cols, rows int) bool
 	// agentIn is what the hooks of the agent in the session said of it. False when the session is gone.
 	agentIn(id string) (agentState, bool)
 	// answered forgets what the agent asked, once an answer is on its way, so a second tap is refused rather than typed into what it asks next.
@@ -290,6 +292,21 @@ func (t *tmux) input(id string, data []byte) bool {
 		args = append(args, fmt.Sprintf("%02x", c))
 	}
 	_, err := run("", "tmux", args...)
+	return err == nil
+}
+
+func (t *tmux) fit(id string, cols, rows int) bool {
+	target, ok := t.target(id)
+	if !ok {
+		return false
+	}
+	var err error
+	if cols > 0 && rows > 0 {
+		_, err = run("", "tmux", "resize-window", "-t", target, "-x", strconv.Itoa(cols), "-y", strconv.Itoa(rows))
+	} else {
+		// resize-window leaves the window at a size of its own. As large as its clients again, then back to following them.
+		_, err = run("", "tmux", "resize-window", "-A", "-t", target, ";", "set-option", "-w", "-u", "-t", target, "window-size")
+	}
 	return err == nil
 }
 

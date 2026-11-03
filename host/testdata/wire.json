@@ -23,7 +23,8 @@
     "{\"action\":{\"forget\":{}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
     "{\"action\":{\"terminal\":{\"open\":true,\"session\":\"11111111-2222-3333-4444-555555555555\",\"vt\":true}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
     "{\"action\":{\"history\":{\"session\":\"11111111-2222-3333-4444-555555555555\",\"vt\":true}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
-    "{\"action\":{\"input\":{\"data\":\"G1tB\",\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}"
+    "{\"action\":{\"input\":{\"data\":\"G1tB\",\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"fit\":{\"cols\":48,\"rows\":22,\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}"
   ],
   "events" : [
     "{\"options\":{\"agent\":\"claude\",\"agents\":[{\"id\":\"claude\",\"name\":\"Claude Code\"}],\"projects\":[{\"id\":\"\\/home\\/me\\/shelf\",\"name\":\"shelf\"}]}}",

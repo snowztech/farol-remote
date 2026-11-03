@@ -36,11 +36,13 @@ public enum RemoteFeature: String, CaseIterable, Sendable {
     case notifications
     /// The terminal as VT sequences, for a phone that draws it as the host does, and bytes typed straight into it.
     case vt
+    /// The pane takes the size of the phone's terminal while the phone shows it, so programs draw for the phone.
+    case fit
 
     /// What a host can do, from what it said. One that said nothing is a Mac from before hosts said, which did legacy operations.
     /// A name this phone does not know is from a newer host, and is left out.
     public static func of(_ names: [String]?) -> Set<RemoteFeature> {
-        guard let names else { return Set(allCases).subtracting([.questionForms, .tasks, .vt]) }
+        guard let names else { return Set(allCases).subtracting([.questionForms, .tasks, .vt, .fit]) }
         return Set(names.compactMap(RemoteFeature.init(rawValue:)))
     }
 }
@@ -422,6 +424,9 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         case terminal(session: UUID, open: Bool, vt: Bool? = nil)
         /// Bytes as a keyboard sends them, already encoded for the program, like `ESC [ A` for Up. Only a host that says `vt` takes it.
         case input(session: UUID, data: Data)
+        /// The size in cells of the phone's terminal at a size it reads well. A host that says `fit` gives the pane that size while
+        /// the phone shows it and nobody uses the host, and gives it back once the phone leaves or someone does. Sent again when it changes.
+        case fit(session: UUID, cols: Int, rows: Int)
         /// A letter with Control held, like Control-D to end a shell or Control-R to search its history. `key` is one of a to z.
         case control(session: UUID, key: String)
         /// What the agent in a session takes after a slash. Asked once, when a reply starts with one.

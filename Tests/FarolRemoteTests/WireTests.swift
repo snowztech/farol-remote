@@ -25,6 +25,7 @@ private struct Wire: Codable {
         .terminal(session: session, open: true), .control(session: session, key: "d"), .commands(session: session),
         .attach(session: session, attachment: attachment, part: 0, parts: 1, data: Data([0xFF])), .forget,
         .terminal(session: session, open: true, vt: true), .history(session: session, vt: true), .input(session: session, data: Data([0x1B, 0x5B, 0x41])),
+        .fit(session: session, cols: 48, rows: 22),
     ]
     let events: [RemoteEvent] = [
         .options(projects: [RemoteChoice(id: "/home/me/shelf", name: "shelf")], agents: [RemoteChoice(id: "claude", name: "Claude Code")], agent: "claude"),

@@ -21,6 +21,8 @@ type fakeTerminal struct {
 	agent agentState
 	// The sessions opened, as "folder name command", and closed.
 	opened, closed []string
+	// The sizes the pane was given, as "48x22", and "0x0" for its own back.
+	fits []string
 }
 
 const fakeSession = "11111111-2222-3333-4444-555555555555"
@@ -49,6 +51,11 @@ func (f *fakeTerminal) vtHistory(id string) (string, bool) {
 
 func (f *fakeTerminal) input(id string, data []byte) bool {
 	return f.paste(id, fmt.Sprintf("%q", data))
+}
+
+func (f *fakeTerminal) fit(id string, cols, rows int) bool {
+	f.fits = append(f.fits, fmt.Sprintf("%dx%d", cols, rows))
+	return id == fakeSession
 }
 
 func (f *fakeTerminal) agentIn(id string) (agentState, bool) {
@@ -565,6 +572,33 @@ func TestAPhoneThatDrawsTheTerminalGetsItAsVT(t *testing.T) {
 		if strings.HasPrefix(event, `{"vt"`) {
 			t.Fatal("sent VT to a phone that closed its terminal")
 		}
+	}
+}
+
+func TestThePaneTakesThePhonesSizeOnlyWhileItShowsTheTerminal(t *testing.T) {
+	b := newBench(t)
+	b.ready()
+	b.ask("w", watch(fakeSession))
+	b.ask("f", fmt.Sprintf(`{"fit":{"session":%q,"cols":48,"rows":22}}`, fakeSession))
+	if len(b.terminal.fits) != 0 {
+		t.Fatalf("resized a pane the phone does not show: %v", b.terminal.fits)
+	}
+	b.ask("o", fmt.Sprintf(`{"terminal":{"session":%q,"open":true,"vt":true}}`, fakeSession))
+	b.tick()
+	// The keyboard came up, so fewer rows fit.
+	b.ask("k", fmt.Sprintf(`{"fit":{"session":%q,"cols":48,"rows":14}}`, fakeSession))
+	b.ask("c", fmt.Sprintf(`{"terminal":{"session":%q,"open":false}}`, fakeSession))
+	b.tick()
+	if got := strings.Join(b.terminal.fits, ","); got != "48x22,48x14,0x0" {
+		t.Fatalf("fits %s", got)
+	}
+	// A phone that goes without closing gives it back too.
+	b.ask("o2", fmt.Sprintf(`{"terminal":{"session":%q,"open":true,"vt":true}}`, fakeSession))
+	b.tick()
+	b.host.receive([]byte{frameLeft, 0, 0, 0, 1})
+	b.host.tick()
+	if got := strings.Join(b.terminal.fits, ","); got != "48x22,48x14,0x0,48x14,0x0" {
+		t.Fatalf("fits %s", got)
 	}
 }
 

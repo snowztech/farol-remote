@@ -118,6 +118,12 @@ type command struct {
 			Session string `json:"session"`
 			Data    []byte `json:"data"`
 		} `json:"input"`
+		// The size of the phone's terminal, which the pane takes while the phone shows it.
+		Fit *struct {
+			Session string `json:"session"`
+			Cols    int    `json:"cols"`
+			Rows    int    `json:"rows"`
+		} `json:"fit"`
 		// Control with a letter, like Control-C.
 		Control *struct {
 			Session string `json:"session"`
@@ -203,7 +209,7 @@ func event(name string, body any) []byte {
 }
 
 // What this host can do beyond screens and typing, by the names RemoteFeature gives them.
-var features = []string{"conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions", "changes", "vt"}
+var features = []string{"conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions", "changes", "vt", "fit"}
 
 // helloEvent says the version this host speaks, what to call it, and what it can do.
 func helloEvent(name string) []byte {

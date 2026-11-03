@@ -39,6 +39,14 @@ type host struct {
 	statuses map[string]string
 	// Phones sent a Live Activity start and not yet the started activity's address. Another start would only stack a second one.
 	starting map[string]bool
+	// The panes sized for a phone, and the size each was given.
+	fitted map[string]paneSize
+}
+
+// The size in cells a phone asked a pane to take.
+type paneSize struct {
+	session    string
+	cols, rows int
 }
 
 type paste struct {
@@ -66,6 +74,8 @@ type phone struct {
 	// It draws that terminal itself, from VT sequences, and was last sent this of it.
 	vt       bool
 	vtScreen *string
+	// The size its terminal fits in, which the pane takes while it shows it.
+	fit *paneSize
 	// What it was last told the watched session waits on. Nil until told, so it is always told once, even that it waits on nothing.
 	request []byte
 	// The session it was told is an empty conversation, an agent started there with no log yet, so it is told once.
@@ -238,6 +248,9 @@ func (h *host) run(id uint32, p *phone, plain []byte) {
 		})
 	case a.Type != nil:
 		h.act(id, p, c.ID, func() bool { return h.terminal.keys(a.Type.Session, a.Type.Text) })
+	case a.Fit != nil:
+		p.fit = &paneSize{a.Fit.Session, a.Fit.Cols, a.Fit.Rows}
+		h.refit()
 	case a.Input != nil:
 		h.act(id, p, c.ID, func() bool { return h.terminal.input(a.Input.Session, a.Input.Data) })
 	case a.Key != nil:
@@ -346,6 +359,7 @@ func (h *host) due(now time.Time) bool {
 func (h *host) tick() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.refit()
 	if len(h.phones) == 0 {
 		h.notice(h.terminal.sessions())
 		return
@@ -358,6 +372,28 @@ func (h *host) tick() {
 		}
 	}
 	h.refresh()
+}
+
+// refit gives each pane a phone shows the phone's size, and its own back once no phone shows it.
+// A server has nobody at it, so unlike the Mac it does not wait for one to look away.
+func (h *host) refit() {
+	wanted := map[string]paneSize{}
+	for _, p := range h.phones {
+		if p.fit != nil && p.fit.cols > 0 && p.fit.rows > 0 && p.terminal == p.fit.session {
+			wanted[p.fit.session] = *p.fit
+		}
+	}
+	for id := range h.fitted {
+		if _, ok := wanted[id]; !ok {
+			h.terminal.fit(id, 0, 0)
+		}
+	}
+	for id, size := range wanted {
+		if h.fitted[id] != size {
+			h.terminal.fit(id, size.cols, size.rows)
+		}
+	}
+	h.fitted = wanted
 }
 
 // refresh sends each phone what changed: the list, and the conversation and screen of the session it has open.
