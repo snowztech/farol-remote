@@ -38,11 +38,13 @@ public enum RemoteFeature: String, CaseIterable, Sendable {
     case vt
     /// The pane takes the size of the phone's terminal while the phone shows it, so programs draw for the phone.
     case fit
+    /// The terminal as one stream: `vtSnapshot` once, then what the program writes as `vtData`, for a phone that asks with `stream`.
+    case vtStream
 
     /// What a host can do, from what it said. One that said nothing is a Mac from before hosts said, which did legacy operations.
     /// A name this phone does not know is from a newer host, and is left out.
     public static func of(_ names: [String]?) -> Set<RemoteFeature> {
-        guard let names else { return Set(allCases).subtracting([.questionForms, .tasks, .vt, .fit]) }
+        guard let names else { return Set(allCases).subtracting([.questionForms, .tasks, .vt, .fit, .vtStream]) }
         return Set(names.compactMap(RemoteFeature.init(rawValue:)))
     }
 }
@@ -421,7 +423,10 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         /// The phone shows the session's terminal, or stopped showing it. While it does, the host sends its screen often.
         /// A phone that never says gets the screen as before, which is how a host tells an older phone apart.
         /// With `vt`, a host that says `vt` also sends the screen as `vt`, for a phone that draws the terminal itself.
-        case terminal(session: UUID, open: Bool, vt: Bool? = nil)
+        /// With `stream` too, a host that says `vtStream` sends `vtSnapshot` and then `vtData` instead of `vt`.
+        case terminal(session: UUID, open: Bool, vt: Bool? = nil, stream: Bool? = nil)
+        /// The phone lost its place in the stream of a terminal it shows, a `vtData` out of order, and asks for a new `vtSnapshot`.
+        case resync(session: UUID)
         /// Bytes as a keyboard sends them, already encoded for the program, like `ESC [ A` for Up. Only a host that says `vt` takes it.
         case input(session: UUID, data: Data)
         /// The size in cells of the phone's terminal at a size it reads well. A host that says `fit` gives the pane that size while
@@ -460,6 +465,12 @@ public enum RemoteEvent: Codable, Equatable, Sendable {
     case vt(session: UUID, cols: Int, rows: Int, data: Data)
     /// Answers `history` with `vt`: the rows above the screen as VT sequences with their colors, oldest first, as far back as fits.
     case vtHistory(session: UUID, data: Data)
+    /// Where a stream starts, or starts over: `history` and then `screen` as VT, in a terminal of `cols` by `rows`.
+    /// The `vtData` that follow carry the same `epoch`, counting `seq` from 0.
+    case vtSnapshot(session: UUID, epoch: Int, cols: Int, rows: Int, history: Data, screen: Data)
+    /// What the program wrote next, to write into the terminal `vtSnapshot` made. A `seq` that is not the next one means the phone
+    /// missed some, and asks with `resync`.
+    case vtData(session: UUID, epoch: Int, seq: Int, data: Data)
     case options(projects: [RemoteChoice], agents: [RemoteChoice], agent: String?)
     case done(command: UUID)
     /// The session an `open` made, so the phone can go straight to it. It answers that command, as `done` does.

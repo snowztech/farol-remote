@@ -119,6 +119,10 @@ type command struct {
 			Data    []byte `json:"data"`
 		} `json:"input"`
 		// The size of the phone's terminal, which the pane takes while the phone shows it.
+		// The phone lost its place in a terminal stream. This host never streams, so it never hears it, but reads it.
+		Resync *struct {
+			Session string `json:"session"`
+		} `json:"resync"`
 		Fit *struct {
 			Session string `json:"session"`
 			Cols    int    `json:"cols"`
