@@ -24,7 +24,7 @@ private struct Wire: Codable {
         .conversation(session: session, before: "a1.0"), .answer(session: session, request: "toolu_01", choice: 2),
         .terminal(session: session, open: true), .control(session: session, key: "d"), .commands(session: session),
         .attach(session: session, attachment: attachment, part: 0, parts: 1, data: Data([0xFF])), .forget,
-        .terminal(session: session, open: true, vt: true), .history(session: session, vt: true), .input(session: session, data: Data([0x1B, 0x5B, 0x41])),
+        .terminal(session: session, open: true, vt: true), .history(session: session, vt: true), .input(session: session, data: Data([0x1B, 0x5B, 0x41])), .terminal(session: session, open: true, vt: true, stream: true), .resync(session: session),
         .fit(session: session, cols: 48, rows: 22),
     ]
     let events: [RemoteEvent] = [

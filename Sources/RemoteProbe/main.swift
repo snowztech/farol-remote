@@ -2,7 +2,7 @@ import FarolRemote
 import Foundation
 
 // A phone in a terminal: `RemoteProbe <pairing link>` pairs as a scan would.
-// Then it takes `watch <n>`, `send <text>`, `key <name>`, `options`, `task <project> <agent> <text>` and `quit` on standard input.
+// Then it takes `watch <n>`, `send <text>`, `key <name>`, `stream`, `echo`, `options`, `task <project> <agent> <text>` and `quit` on standard input.
 
 final class Probe {
     private let phone = DeviceKey()
@@ -13,6 +13,8 @@ final class Probe {
     private var projects: [RemoteChoice] = []
     private var agents: [RemoteChoice] = []
     private var watched: UUID?
+    /// When `echo` typed its space, until what the program wrote back arrives.
+    private var echoSent: Date?
     private let connection: RelayConnection
 
     init(offer: PairingOffer) throws {
@@ -75,6 +77,16 @@ final class Probe {
         case .event(.history(_, let text)): print("# history\n\(text)\n# end")
         case .event(.vt(_, let cols, let rows, let data)): print("# vt \(cols)x\(rows), \(data.count) bytes")
         case .event(.vtHistory(_, let data)): print("# vt history, \(data.count) bytes")
+        case .event(.vtSnapshot(_, let epoch, let cols, let rows, let history, let screen)):
+            print("# vt snapshot \(epoch), \(cols)x\(rows), \(history.count) + \(screen.count) bytes")
+        case .event(.vtData(_, let epoch, let seq, let data)):
+            if let sent = echoSent {
+                echoSent = nil
+                print("# echo in \(Int(Date().timeIntervalSince(sent) * 1000)) ms")
+                watched.map { ask(.input(session: $0, data: Data([0x7F]))) }
+            } else {
+                print("# vt data \(epoch).\(seq), \(data.count) bytes")
+            }
         case .event(.options(let projects, let agents, _)):
             self.projects = projects
             self.agents = agents
@@ -116,6 +128,14 @@ final class Probe {
         case ("key", let name?):
             guard let key = RemoteKey(rawValue: name), let watched else { return print("! watch a session first, then a key name") }
             ask(.key(session: watched, key: key))
+        case ("stream", _):
+            guard let watched else { return print("! watch a session first") }
+            ask(.terminal(session: watched, open: true, vt: true, stream: true))
+        case ("echo", _):
+            // Types a space and times what comes back, then deletes it. A prompt that echoes what is typed shows the round trip.
+            guard let watched else { return print("! watch a session and stream it first") }
+            echoSent = Date()
+            ask(.input(session: watched, data: Data(" ".utf8)))
         case ("options", _):
             ask(.options)
         case ("task", let rest?):
@@ -127,7 +147,7 @@ final class Probe {
         case ("quit", _):
             exit(0)
         default:
-            print("! watch <n> | send <text> | key <name> | options | task <project> <agent> <text> | quit")
+            print("! watch <n> | send <text> | key <name> | stream | echo | options | task <project> <agent> <text> | quit")
         }
     }
 }
