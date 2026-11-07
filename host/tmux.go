@@ -104,6 +104,11 @@ func forgetSessionOptions() {
 func run(input string, name string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
+	// Without a UTF-8 locale, as on a fresh container or VPS, tmux prints the tabs in a format as underscores,
+	// and no session would be read. -u makes it treat the output as UTF-8 whatever the locale.
+	if name == "tmux" {
+		args = append([]string{"-u"}, args...)
+	}
 	command := exec.CommandContext(ctx, name, args...)
 	command.Stdin = strings.NewReader(input)
 	out, err := command.Output()

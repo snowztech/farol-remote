@@ -11,6 +11,31 @@ import (
 	"github.com/snowztech/farol-remote/host/agent"
 )
 
+// A machine without a UTF-8 locale, like a fresh container, makes tmux print the tabs between fields as underscores.
+func TestListsSessionsWithoutAUTF8Locale(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux is not installed")
+	}
+	dir, err := os.MkdirTemp("/tmp", "farol")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMUX_TMPDIR", dir)
+	for _, name := range []string{"LC_ALL", "LC_CTYPE", "LANG"} {
+		t.Setenv(name, "C")
+	}
+	t.Cleanup(func() {
+		run("", "tmux", "kill-server")
+		os.RemoveAll(dir)
+	})
+	if _, err := run("", "tmux", "new-session", "-d", "-s", "demo", "cat"); err != nil {
+		t.Fatal(err)
+	}
+	if list := newTmux([]byte("host")).sessions(); len(list) != 1 || list[0].Name != "demo" {
+		t.Fatalf("sessions %+v", list)
+	}
+}
+
 // Runs against a real tmux, on a server of its own, and is skipped where there is none.
 func TestListsReadsAndTypesIntoARealSession(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
