@@ -32,7 +32,7 @@ func TestListsReadsAndTypesIntoARealSession(t *testing.T) {
 
 	tm := newTmux([]byte("host"))
 	list := tm.sessions()
-	if len(list) != 1 || list[0].Name != "demo" || list[0].Status != "idle" {
+	if len(list) != 1 || list[0].Name != "demo" || list[0].Status != "idle" || !strings.HasPrefix(list[0].Window, "@") {
 		t.Fatalf("sessions %+v", list)
 	}
 	id := list[0].ID

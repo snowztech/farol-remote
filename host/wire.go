@@ -199,6 +199,8 @@ type session struct {
 	Agent string `json:"agent,omitempty"`
 	// What it waits on, in one line, when its hook said.
 	Asking string `json:"asking,omitempty"`
+	// The tmux window, like @3, so Farol on a Mac can attach to it over ssh.
+	Window string `json:"window,omitempty"`
 }
 
 // What the host tells the phone. The sessions and the screen are always sent in full, so a phone that missed some has nothing to replay.

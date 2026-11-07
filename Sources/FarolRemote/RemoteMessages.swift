@@ -80,14 +80,18 @@ public struct RemoteSession: Codable, Equatable, Identifiable, Sendable {
     public var agent: String?
     /// What it waits on, in one line, so the list says which session needs what without opening each.
     public var asking: String?
+    /// The tmux window on a server, like "@3", so a Mac can attach to it over ssh. Nil from Farol on a Mac.
+    public var window: String?
 
-    public init(id: UUID, name: String, branch: String?, status: RemoteStatus, agent: String? = nil, asking: String? = nil) {
+    public init(id: UUID, name: String, branch: String?, status: RemoteStatus, agent: String? = nil, asking: String? = nil,
+                window: String? = nil) {
         self.id = id
         self.name = name
         self.branch = branch
         self.status = status
         self.agent = agent
         self.asking = asking
+        self.window = window
     }
 }
 
