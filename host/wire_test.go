@@ -48,7 +48,7 @@ var shelfBranch = "main"
 
 // A waiting agent and a shell, as Swift's sample writes them, with the session and command ids it uses.
 var sampleSessions = []session{
-	{ID: "11111111-2222-3333-4444-555555555555", Name: "shelf", Branch: &shelfBranch, Status: "waiting", Agent: "codex", Asking: "Run touch probe.txt?"},
+	{ID: "11111111-2222-3333-4444-555555555555", Name: "shelf", Branch: &shelfBranch, Status: "waiting", Agent: "codex", Asking: "Run touch probe.txt?", Window: "@3"},
 	{ID: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE", Name: "zsh", Status: "idle"},
 }
 

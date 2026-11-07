@@ -134,7 +134,7 @@ func (t *tmux) sessions() []session {
 		id := sessionID(t.host, fields[0], fields[1])
 		targets[id] = fields[0]
 		agents[id] = agentState{folder: fields[2], status: status, log: fields[4], started: fields[5] != "", request: readRequest(request)}
-		one := session{ID: id, Name: fields[8], Status: "idle", Agent: agentOf(fields[4])}
+		one := session{ID: id, Name: fields[8], Status: "idle", Agent: agentOf(fields[4]), Window: fields[0]}
 		if status != "" {
 			one.Status = status
 		}
