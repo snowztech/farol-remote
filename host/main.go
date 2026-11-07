@@ -3,7 +3,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
@@ -25,8 +27,12 @@ The Farol Remote CLI, for a machine that stays on. It lets a paired phone see an
 fh is a shorter name for it.
 
   setup           Make this machine ready: connect your agents, keep farol-host running, pair a phone.
+                  --no-pair skips the phone, for when Farol on a Mac is the one being added.
   run             Let paired phones in, for as long as it runs. The service setup adds runs it for you.
   pair            Show a code to scan from Farol on a phone. farol-host has to be running.
+  trust <key> <name>
+                  Let in Farol on a Mac by its key, as Add Server in Farol does over ssh.
+                  Prints the link Farol connects with. ssh already proved who you are, so no code is needed.
   devices         List the phones this machine lets in.
   forget <name>   Stop letting a phone in.
   status <word>   Say what the agent in this session is doing: start, working, waiting, done or clear.
@@ -95,6 +101,9 @@ func main() {
 		letPhonesIn(store, *relay, key)
 	case "setup":
 		if setup(*relay) {
+			if flag.Arg(1) == "--no-pair" {
+				return
+			}
 			if len(store.devices()) == 0 {
 				pair(store, *relay, key)
 			} else {
@@ -103,6 +112,13 @@ func main() {
 		}
 	case "pair":
 		pair(store, *relay, key)
+	case "trust":
+		link, err := trust(store, *relay, key, flag.Arg(1), flag.Arg(2))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "farol-host: %v\n\n%s", err, usage)
+			os.Exit(64)
+		}
+		fmt.Println(link)
 	case "upgrade":
 		upgrade(*relay)
 	case "uninstall":
@@ -188,6 +204,30 @@ func paired(devices []device) string {
 		names = append(names, d.Name)
 	}
 	return "Paired with " + strings.Join(names, ", ") + ". pair adds another phone."
+}
+
+// trust lets in a Mac by its public key and name, and gives the link it connects with.
+// The link has no secret and never runs out: it only says where this host is and which key is its own.
+// One device per name, so a Mac added again takes the place of its older key.
+func trust(store store, relay string, key deviceKey, encoded, name string) (string, error) {
+	mac, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(mac) != 32 {
+		return "", errors.New("trust needs the Mac's key, 32 bytes in base64, then its name")
+	}
+	if strings.TrimSpace(name) == "" {
+		return "", errors.New("trust needs a name for the Mac after its key")
+	}
+	for _, d := range store.devices() {
+		if d.Name == name && !bytes.Equal(d.Key, mac) {
+			if err := store.forget(d.Key); err != nil {
+				return "", err
+			}
+		}
+	}
+	if err := store.add(device{Key: mac, Name: name}); err != nil {
+		return "", err
+	}
+	return offer{Relay: relay, Mac: key.public, Secret: []byte{}}.link(), nil
 }
 
 // pair shows a code and waits for the running host to say a phone scanned it.

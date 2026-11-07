@@ -33,16 +33,19 @@ claude
 
 On the phone, the session opens as the agent's conversation, and the terminal is one tap away. An approval or a question shows with its answers, to pick with a tap. Typing a slash lists the agent's commands and skills, and a photo or a screenshot can go with a reply. The phone is notified when an agent waits for you or finishes, even with the app closed, its Live Activity keeps count of the agents that work or wait, can open a new session in a project already open here, with Claude Code, Codex or a plain shell, as a new window in the tmux session you used last, and shows what changed in a session's repository, file by file. A session with no agent opens as its terminal.
 
+**From Farol on a Mac.** In Farol, Add Server does all of this over ssh: it installs or upgrades `farol-host`, runs its setup and lets the Mac in, and the server's agents show in the Mac's sidebar. A server you set up by hand is added the same way.
+
 A phone knows several Macs and servers at once. Scanning a server's code adds it next to your Mac, and its sessions show in the same list, with the server's name.
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `farol-host setup` | Makes the machine ready: connects your agents, keeps `farol-host` running, pairs a phone. Safe to run again. |
+| `farol-host setup` | Makes the machine ready: connects your agents, keeps `farol-host` running, pairs a phone. Safe to run again. `--no-pair` leaves the phone out. |
 | `farol-host` | Lists the commands, and says whether it is running and which phones are paired. |
 | `farol-host run` | Lets paired phones in, for as long as it runs. What the service runs for you. |
 | `farol-host pair` | Shows a code to pair another phone. `farol-host` has to be running. |
+| `farol-host trust <key> <name>` | Lets in Farol on a Mac by its key, and prints the link it connects with. Add Server in Farol runs it over ssh, so you never need to. |
 | `farol-host devices` | Lists the phones this machine lets in. |
 | `farol-host forget <name>` | Stops letting a phone in, notifying it and updating its Live Activity. One that is connected is cut off at once. A phone that forgets this machine in Farol tells it the same. |
 | `farol-host status <word>` | Says what the agent in this session is doing. The hooks `setup` adds call it. |
