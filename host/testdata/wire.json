@@ -14,6 +14,7 @@
     "{\"action\":{\"close\":{\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
     "{\"action\":{\"changes\":{\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
     "{\"action\":{\"diff\":{\"path\":\"b.go\",\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
+    "{\"action\":{\"ship\":{\"message\":\"fix: it\",\"request\":true,\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
     "{\"action\":{\"conversation\":{\"before\":\"a1.0\",\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
     "{\"action\":{\"answer\":{\"choice\":2,\"request\":\"toolu_01\",\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",
     "{\"action\":{\"terminal\":{\"open\":true,\"session\":\"11111111-2222-3333-4444-555555555555\"}},\"id\":\"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\"}",

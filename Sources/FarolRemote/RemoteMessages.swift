@@ -40,11 +40,13 @@ public enum RemoteFeature: String, CaseIterable, Sendable {
     case fit
     /// The terminal as one stream: `vtSnapshot` once, then what the program writes as `vtData`, for a phone that asks with `stream`.
     case vtStream
+    /// Committing a session's changes, pushing its branch and opening its pull request, as the host's review panel does.
+    case ship
 
     /// What a host can do, from what it said. One that said nothing is a Mac from before hosts said, which did legacy operations.
     /// A name this phone does not know is from a newer host, and is left out.
     public static func of(_ names: [String]?) -> Set<RemoteFeature> {
-        guard let names else { return Set(allCases).subtracting([.questionForms, .tasks, .vt, .fit, .vtStream]) }
+        guard let names else { return Set(allCases).subtracting([.questionForms, .tasks, .vt, .fit, .vtStream, .ship]) }
         return Set(names.compactMap(RemoteFeature.init(rawValue:)))
     }
 }
@@ -411,6 +413,9 @@ public struct RemoteCommand: Codable, Equatable, Sendable {
         case changes(session: UUID)
         /// One of those files, as a unified diff.
         case diff(session: UUID, path: String)
+        /// Commits every uncommitted change with `message`, or nothing when it is nil, then pushes the branch.
+        /// With `request` it then opens the branch's pull request or merge request, or finds the one already open.
+        case ship(session: UUID, message: String?, request: Bool)
         /// The conversation of the agent in a session, read from the agent's own log rather than its screen.
         /// Nil asks for the latest messages, and the host then sends new ones as they come while the session is watched.
         /// A message's id asks for the page just before it, to read further back.
@@ -476,7 +481,10 @@ public enum RemoteEvent: Codable, Equatable, Sendable {
     /// The session an `open` made, so the phone can go straight to it. It answers that command, as `done` does.
     case opened(command: UUID, session: UUID)
     /// Answers `changes`. `scope` says what they are compared with, like "Uncommitted" or "Since main".
-    case changes(session: UUID, scope: String, files: [RemoteChange])
+    /// `branch` is the one checked out, nil when detached or from a host that does not say.
+    case changes(session: UUID, scope: String, files: [RemoteChange], branch: String? = nil)
+    /// Answers `ship`: the branch that went up, and its pull request when one was asked for.
+    case shipped(command: UUID, branch: String, request: URL?)
     /// Messages of a session's conversation, and where they go. `more` says there are earlier ones to ask for.
     case conversation(session: UUID, messages: [RemoteMessage], place: RemotePlace, more: Bool)
     /// Answers `diff`: the file as a unified diff, `@@` headers and `+`, `-` and ` ` lines, cut short if very long.

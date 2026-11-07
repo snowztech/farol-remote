@@ -93,9 +93,10 @@ final class Probe {
             print("# projects \(projects.map(\.name)) agents \(agents.map(\.name))")
         case .event(.done): print("# done")
         case .event(.opened(_, let session)): print("# opened \(session)")
-        case .event(.changes(_, let scope, let files)):
-            print("# changes, \(scope)")
+        case .event(.changes(_, let scope, let files, let branch)):
+            print("# changes, \(scope)" + (branch.map { " on \($0)" } ?? ""))
             files.forEach { print("  +\($0.added) -\($0.removed)  \($0.status.rawValue)  \($0.path)") }
+        case .event(.shipped(_, let branch, let request)): print("# shipped \(branch)" + (request.map { " \($0)" } ?? ""))
         case .event(.diff(_, let path, let text)): print("# diff \(path)\n\(text)\n# end")
         case .event(.conversation(_, let messages, let place, let more)):
             print("# conversation \(messages.count) messages, \(place)\(more ? ", more before" : "")")
