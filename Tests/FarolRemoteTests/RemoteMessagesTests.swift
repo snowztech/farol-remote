@@ -20,6 +20,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
         .close(session: session), .key(session: session, key: .shiftTab),
         .conversation(session: session, before: nil), .conversation(session: session, before: "a1b2.0"),
         .changes(session: session), .diff(session: session, path: "Sources/App.swift"),
+        .ship(session: session, message: "fix: it", request: true), .ship(session: session, message: nil, request: false),
         .answer(session: session, request: "toolu_01", choice: 2),
         .watch(session: session, asks: true),
         .respondAsk(session: session, ask: UUID(), decision: .submit([
@@ -54,6 +55,9 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
             RemoteChange(path: "icon.png", status: .added, added: 0, removed: 0, binary: true),
         ]),
         .changes(session: session.id, scope: "Since main", files: []),
+        .changes(session: session.id, scope: "Uncommitted", files: [], branch: "feat/x"),
+        .shipped(command: UUID(), branch: "feat/x", request: URL(string: "https://github.com/o/r/pull/7")),
+        .shipped(command: UUID(), branch: "feat/x", request: nil),
         .conversation(session: session.id, messages: [], place: .after("x"), more: false),
         .conversation(session: session.id, messages: [RemoteMessage(id: "c", role: .agent, text: "Done.")], place: .before("d"), more: true),
         .conversation(session: session.id, messages: [
@@ -225,7 +229,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
 @Test func aHostSaysWhatItCanDo() throws {
     #expect(RemoteFeature.of(["conversation", "pictures-in-3d", "terminal"]) == [.conversation, .terminal])
     #expect(RemoteFeature.of([]).isEmpty)
-    #expect(RemoteFeature.of(nil) == Set(RemoteFeature.allCases).subtracting([.questionForms, .tasks, .vt, .fit, .vtStream]))
+    #expect(RemoteFeature.of(nil) == Set(RemoteFeature.allCases).subtracting([.questionForms, .tasks, .vt, .fit, .vtStream, .ship]))
     // A host from before features greets as it always did, and reads as one that said nothing.
     let old = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1}}"#.utf8))
     #expect(old == .hello(version: 1))
@@ -236,7 +240,7 @@ private func roundTrip<T: Codable & Equatable>(_ value: T) throws -> T {
     let hello = try JSONDecoder().decode(RemoteEvent.self, from: Data(#"{"hello":{"version":1,"features":["conversation","requests","commands","attachments","terminal","notifications","sessions","changes","vt","fit"],"name":"host"}}"#.utf8))
     #expect(hello == .hello(version: 1, features: ["conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions", "changes", "vt", "fit"], name: "host"))
     // Everything a Mac does.
-    #expect(RemoteFeature.of(["conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions", "changes", "vt", "fit"]) == Set(RemoteFeature.allCases).subtracting([.questionForms, .tasks, .vtStream]))
+    #expect(RemoteFeature.of(["conversation", "requests", "commands", "attachments", "terminal", "notifications", "sessions", "changes", "vt", "fit"]) == Set(RemoteFeature.allCases).subtracting([.questionForms, .tasks, .vtStream, .ship]))
 }
 
 @Test func farolHostsChangesRead() throws {

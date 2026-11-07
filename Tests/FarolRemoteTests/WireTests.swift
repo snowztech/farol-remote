@@ -20,7 +20,7 @@ private struct Wire: Codable {
         .key(session: session, key: .enter), .type(session: session, text: "/"),
         .notify(token: Data([1]), sandbox: true, notices: [.waiting], key: Data([2]), starts: Data([3])), .activity(token: Data([4]), sandbox: false),
         .history(session: session), .options, .task(project: "p", agent: "a", text: "t"), .open(project: "/home/me/shelf", agent: "claude"),
-        .close(session: session), .changes(session: session), .diff(session: session, path: "b.go"),
+        .close(session: session), .changes(session: session), .diff(session: session, path: "b.go"), .ship(session: session, message: "fix: it", request: true),
         .conversation(session: session, before: "a1.0"), .answer(session: session, request: "toolu_01", choice: 2),
         .terminal(session: session, open: true), .control(session: session, key: "d"), .commands(session: session),
         .attach(session: session, attachment: attachment, part: 0, parts: 1, data: Data([0xFF])), .forget,
